@@ -68,7 +68,12 @@ Function Add-USiteFile {
         
         Write-Host 'Parsing all Sites - Please Wait'
 
-        $Credential = Get-CredentialsAsJson
+        if ($Credential) {
+            $Credential = Get-CredentialsAsJson -Credential $Credential
+        }
+        else {
+            $Credential = Get-CredentialsAsJson
+        }
 
         if ((Test-Path -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Server.xml')) -and (!($Server))) {
             $Server = Import-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Server.xml') -PipelineVariable 'Server'
