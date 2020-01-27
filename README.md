@@ -10,7 +10,6 @@
 ## Adding a Credential File
 ```powershell
 Add-UCredentialFile
-
 Get-Credential | Add-UCredentialFile
 ```
 
@@ -28,7 +27,13 @@ Add-USiteFile # will read the credential and server file
 
 ## Open a Unifi Site
 ```powershell
-Add-UServerFile -Server 'server01:8443', 'server02:8443', 'server03:8443'
+Open-USite # will use the default browser, if non supperted on is installed it will open Edge
+Open-USite -Chrome # will force Chrome
+```
+
+## Add a Unifi Profile for Chrome
+```powershell
+Add-UProfile -Chrome # will add a Chrome(Edge Chromium) profile under %localappdata%\Unifi\ which is used to safe browser settings
 ```
 
 # Maintainers 

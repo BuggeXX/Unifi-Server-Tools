@@ -1,3 +1,0 @@
-[0127/114940.495:ERROR:file_io.cc(89)] ReadExactly: expected 120, observed 40
-[0127/115726.188:ERROR:settings.cc(325)] Settings version is not 1
-[0127/150311.333:ERROR:file_io.cc(89)] ReadExactly: expected 120, observed 40
