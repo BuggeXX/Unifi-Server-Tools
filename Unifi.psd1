@@ -19,7 +19,9 @@
         'Add-UServerFile',
         'Add-USiteFile',
         'Add-UCredentialFile',
-        'Open-USite'
+        'Open-USite',
+        'Get-USiteURL',
+        'Add-UProfile'
     )
 
     CmdletsToExport      = @()
