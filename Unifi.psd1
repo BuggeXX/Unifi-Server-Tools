@@ -8,7 +8,7 @@
 # Modified Elmar Niederkofler 27.01.2020
 
 @{
-    ModuleVersion        = '1.1.1'
+    ModuleVersion        = '1.2.0'
     GUID                 = '6d390ab4-57aa-49ea-8bf0-93d1281297ec'
     Author               = 'Elmar Niederkofler'
     CompanyName          = 'Telmekom'
