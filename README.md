@@ -10,7 +10,7 @@ Note: it will create a directory under '%localappdata%\Unifi\' and read/write co
 ## Adding a Credential File
 ```powershell
 Add-UCredentialFile
-Get-Credential | Add-UCredentialFile
+Add-UCredentialFile -Credential (Get-Credential)
 ```
 
 ## Adding a Server Source File
