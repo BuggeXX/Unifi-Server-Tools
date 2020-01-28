@@ -460,13 +460,14 @@ Function Get-UServerStats {
                 $DistributionStats += @([PSCustomObject]@{ 
                         Server              = $Server
                         Sites               = (($Sites | Where-Object -Property Server -Match $Server).Count)
+                        PendingUpdates      = ((($Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property upgradable -eq $true).site_id).SiteName
                         DevicesAdopted      = (($Sites | Where-Object -Property Server -Match $Server).health.num_adopted | Measure-Object -sum).sum
                         DevicesOnline       = ((($Sites | Where-Object -Property Server -Match $Server).health.num_ap | Measure-Object -sum).sum) + ((($Sites | Where-Object -Property Server -Match $Server).health.num_sw | Measure-Object -sum).sum)
                         DevicesDisconnected = (($Sites | Where-Object -Property Server -Match $Server).health.num_disconnected | Measure-Object -sum).sum
                         Clients             = (($Sites | Where-Object -Property Server -Match $Server).health.num_user | Measure-Object -sum).sum
                     })
 
-            }
+            }       
 
         }
         else {
