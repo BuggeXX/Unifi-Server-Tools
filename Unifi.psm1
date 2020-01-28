@@ -58,7 +58,8 @@ Function Add-USiteFile {
         [parameter(Mandatory = $false, Position = 0)]
         [array]$Server,
         [parameter(Mandatory = $false, Position = 1)]
-        [psobject]$Credential
+        [psobject]$Credential,
+        [switch]$Full
     )
 
     begin {
@@ -96,14 +97,26 @@ Function Add-USiteFile {
                 }
                 if ($Login.meta.rc -eq 'ok') {
                     foreach ($Site in (Invoke-RestMethod -Uri "$URL/api/stat/sites" -WebSession $myWebSession -SkipCertificateCheck).data) {
+                        if ($Full) {
+                            $Sites += @([PSCustomObject]@{
 
-                        $Sites += @([PSCustomObject]@{
+                                    Server   = $URL
+                                    SiteID   = $Site._id
+                                    SiteURL  = $Site.name
+                                    SiteName = $Site.desc
+                                    Health   = $Site.health
+                                    Devices  = Invoke-RestMethod -Uri "$URL/api/s/$($Site.Name)/stat/device" -WebSession $myWebSession -SkipCertificateCheck
+                                })
+                        }
+                        else {
+                            $Sites += @([PSCustomObject]@{
 
-                                Server   = $URL
-                                SiteID   = $Site._id
-                                SiteURL  = $Site.name
-                                SiteName = $Site.desc
-                            })
+                                    Server   = $URL
+                                    SiteID   = $Site._id
+                                    SiteURL  = $Site.name
+                                    SiteName = $Site.desc
+                                })
+                        }
 
                     }
                     Invoke-RestMethod -Uri "$URL/api/logout" -Method Post -ContentType "application/json; charset=utf-8" -SessionVariable myWebSession -SkipCertificateCheck | Out-Null
@@ -116,7 +129,13 @@ Function Add-USiteFile {
     }
 
     end {
-        $Sites | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Sites.xml') -Force | Out-Null
+        if ($Full) {
+            $Sites | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\SitesFull.xml') -Force | Out-Null
+        }
+        else {
+            $Sites | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Sites.xml') -Force | Out-Null
+        }
+        
         Remove-Variable -Name 'Credential', 'URL', 'Sites', 'Site', 'Item', 'Server' -ErrorAction SilentlyContinue
     }
 
@@ -136,7 +155,16 @@ Function Open-USite {
     begin {
         if (!($Sites)) {
             try {
-                $Sites = Import-Clixml "$env:LOCALAPPDATA\Unifi\Sites.xml"
+                if (Test-Path -Path "$env:LOCALAPPDATA\Unifi\Sites.xml") {
+                    $Sites = Import-Clixml "$env:LOCALAPPDATA\Unifi\Sites.xml"
+                }
+                elseif (Test-Path -Path "$env:LOCALAPPDATA\Unifi\SitesFull.xml") {
+                    $Sites = Import-Clixml "$env:LOCALAPPDATA\Unifi\SitesFull.xml"
+                }
+                else {
+                    throw
+                }
+
             }
             catch {
                 Write-Warning "$env:LOCALAPPDATA\Unifi\Sites.xml not found"
@@ -179,8 +207,8 @@ Function Open-USite {
         Invoke-Expression $Switch
 
         if (($DefaultBrowserName -like 'ChromeHTML') -or ($Chrome)) {
-            if (Test-Path -Path "$env:LOCALAPPDATA\Unifi\Unifi") {
-                $Driver = Start-SeChrome -StartURL $URL -Maximized -Quiet -ProfileDirectoryPath "$env:LOCALAPPDATA\Unifi\Unifi"
+            if (Test-Path -Path "$env:LOCALAPPDATA\Unifi\Chrome\Unifi") {
+                $Driver = Start-SeChrome -StartURL $URL -Maximized -Quiet -ProfileDirectoryPath "$env:LOCALAPPDATA\Unifi\Chrome\Unifi"
             }
             else {
                 $Driver = Start-SeChrome -StartURL $URL -Maximized -Quiet
@@ -189,13 +217,19 @@ Function Open-USite {
         }
 
         elseif (($DefaultBrowserName -like 'FirefoxURL-308046B0AF4A39CB') -or ($Firefox)) {
-            $Driver = Start-SeFirefox -StartURL $URL -Maximized -Quiet
+            if (Test-Path -Path "$env:LOCALAPPDATA\Unifi\Firefox\Unifi") {
+                $Args = "`" -profile`"", " Unifi"
+                $Driver = Start-SeFirefox -StartURL $URL -Maximized -Quiet -Arguments $Args
+            }
+            else {
+                $Driver = Start-SeFirefox -StartURL $URL -Maximized -Quiet
+            }  
             while ($Driver.Url -notmatch 'unifi.telmekom.net:8443') { }
         }
 
         elseif ($DefaultBrowserName -like 'MSEdgeHTM') {
-            if (Test-Path -Path "$env:LOCALAPPDATA\Unifi\Unifi") {
-                $Driver = Start-SeNewEdge -StartURL $URL -Maximized -Quiet -ProfileDirectoryPath "$env:LOCALAPPDATA\Unifi\Unifi"
+            if (Test-Path -Path "$env:LOCALAPPDATA\Unifi\Chrome\Unifi") {
+                $Driver = Start-SeNewEdge -StartURL $URL -Maximized -Quiet -ProfileDirectoryPath "$env:LOCALAPPDATA\Unifi\Chrome\Unifi"
             }
             else {
                 $Driver = Start-SeNewEdge -StartURL $URL -Maximized -Quiet
@@ -254,20 +288,34 @@ Function Add-UProfile {
         [switch]$Refresh
     )
     begin {
+
+        if (!(Test-Path -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi'))) {
+            New-Item -Path $Env:LOCALAPPDATA -Name 'Unifi' -ItemType Directory | Out-Null
+        }
+
         if ($Chrome) {
             $ChromeProcessID = (Get-Process -Name '*Chrome*').ID
             if (Test-Path -Path "$env:LOCALAPPDATA\Unifi\Unifi") {
                 Remove-Item -Path "$env:LOCALAPPDATA\Unifi\Unifi" -Force -Recurse
             }
             Write-Warning -Message 'Creating new profile, please wait'
+            $ChromePath = Get-Item (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe').'(Default)'
+        }
+
+        if ($Firefox) {
+            $FirefoxProcessID = (Get-Process -Name '*Firefox*').ID
+            if (Test-Path -Path "$env:LOCALAPPDATA\Unifi\Unifi") {
+                Remove-Item -Path "$env:LOCALAPPDATA\Unifi\Unifi" -Force -Recurse
+            }
+            Write-Warning -Message 'Creating new profile, please wait'
+            $FirefoxPath = Get-Item (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\firefox.exe').'(Default)'
         }
 
     }
 
     process {
         if ($Chrome) {
-            Invoke-Expression -Command "&`"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe`" --user-data-dir=$env:LOCALAPPDATA\Unifi\Unifi --silent-launch"
-            
+            Invoke-Expression -Command "&`"$($ChromePath.FullName)`" --user-data-dir=$env:LOCALAPPDATA\Unifi\Chrome\Unifi --silent-launch"
             Start-Sleep 10     
             foreach ($ProcessID in (Get-Process -Name '*Chrome*').ID) {
                 if ($ProcessID -notin $ChromeProcessID) {
@@ -278,9 +326,22 @@ Function Add-UProfile {
 
         }
 
-        end {
-            Remove-Variable -Name 'ChromeProcessID', 'ProcessID', 'Chrome' -ErrorAction SilentlyContinue
+        if ($Firefox) {
+            Invoke-Expression -Command "&`"$($FirefoxPath.FullName)`" --CreateProfile `"Unifi $env:LOCALAPPDATA\Unifi\Firefox\Unifi`" --no-remote"  
+            Start-Sleep 10     
+            foreach ($ProcessID in (Get-Process -Name '*Firefox*').ID) {
+                if ($ProcessID -notin $FirefoxProcessID) {
+                    Stop-Process -Id $ProcessID -Force -ErrorAction SilentlyContinue
+                }
+
+            }
+
         }
+
+    }
+
+    end {
+        Remove-Variable -Name 'ChromeProcessID', 'ProcessID', 'Chrome', 'FirefoxProcessID', 'Firefox', 'ChromePath', 'FirefoxPath' -ErrorAction SilentlyContinue
 
     }
 
@@ -296,7 +357,16 @@ Function Get-USiteURL {
     begin {
         if (!($Sites)) {
             try {
-                $Sites = Import-Clixml "$env:LOCALAPPDATA\Unifi\Sites.xml"
+                if (Test-Path -Path "$env:LOCALAPPDATA\Unifi\Sites.xml") {
+                    $Sites = Import-Clixml "$env:LOCALAPPDATA\Unifi\Sites.xml"
+                }
+                elseif (Test-Path -Path "$env:LOCALAPPDATA\Unifi\SitesFull.xml") {
+                    $Sites = Import-Clixml "$env:LOCALAPPDATA\Unifi\SitesFull.xml"
+                }
+                else {
+                    throw
+                }
+
             }
             catch {
                 Write-Warning "$env:LOCALAPPDATA\Unifi\Sites.xml not found"
@@ -341,6 +411,91 @@ Function Get-USiteURL {
     end {
         Write-Host -Object $URL
         Remove-Variable -Name 'Sites', 'Credential', 'Switch', 'SelectionSite', 'i', 'URL' -ErrorAction SilentlyContinue
+    }
+
+}
+
+Function Get-UServerStats {
+    param(
+        [Parameter(Mandatory = $false, Position = 0)]
+        [psobject]$Sites,
+        [switch]$Device,
+        [switch]$Distribution
+    )    
+    begin {
+        if (!($Sites)) {
+            try {
+                if (Test-Path -Path "$env:LOCALAPPDATA\Unifi\SitesFull.xml") {
+                    $Sites = Import-Clixml "$env:LOCALAPPDATA\Unifi\SitesFull.xml"
+                }
+                else {
+                    throw
+                }
+
+            }
+            catch {
+                Write-Warning "$env:LOCALAPPDATA\Unifi\SitesFull.xml not found"
+                Write-Warning "Run Add-USiteFile -Full or choice the file manually with -Sites <Path>"
+                exit
+            }
+
+        }
+
+    }
+
+    process {
+        if ($Device) {
+            $DeviceStats = [PSCustomObject]@{
+                Upgradeable  = ($Sites.Devices.data | Where-Object -Property upgradable -eq $true).Count
+                Unsupported  = ($Sites.Devices.data | Where-Object -Property unsupported -eq $true).Count
+                Incompatible = ($Sites.Devices.data | Where-Object -Property model_incompatible -eq $true).Count
+                Mesh         = ($Sites.Devices.data | Where-Object -Property mesh_sta_vap_enabled -eq $true).Count
+                Locating     = ($Sites.Devices.data | Where-Object -Property locating -eq $true).Count
+                Overheating  = ($Sites.Devices.data | Where-Object -Property overheating -eq $true).Count
+            }
+
+        }
+        if ($Distribution) {
+            foreach ($Server in ($Sites.Server | Sort-Object -Unique)) {
+                $DistributionStats += @([PSCustomObject]@{ 
+                        Server              = $Server
+                        Sites               = (($Sites | Where-Object -Property Server -Match $Server).Count)
+                        DevicesAdopted      = (($Sites | Where-Object -Property Server -Match $Server).health.num_adopted | Measure-Object -sum).sum
+                        DevicesOnline       = ((($Sites | Where-Object -Property Server -Match $Server).health.num_ap | Measure-Object -sum).sum) + ((($Sites | Where-Object -Property Server -Match $Server).health.num_sw | Measure-Object -sum).sum)
+                        DevicesDisconnected = (($Sites | Where-Object -Property Server -Match $Server).health.num_disconnected | Measure-Object -sum).sum
+                        Clients             = (($Sites | Where-Object -Property Server -Match $Server).health.num_user | Measure-Object -sum).sum
+                    })
+
+            }
+
+        }
+        else {
+            $ServerStats = [PSCustomObject]@{
+                Sites               = $Sites.Count
+                DevicesAdopted      = ($Sites.health.num_adopted | Measure-Object -sum).sum
+                DevicesOnline       = (($Sites.health.num_ap | Measure-Object -sum).sum) + (($Sites.health.num_sw | Measure-Object -sum).sum)
+                DevicesDisconnected = ($Sites.health.num_disconnected | Measure-Object -sum).sum
+                Clients             = ($Sites.health.num_user | Measure-Object -sum).sum  
+            }
+
+        }
+
+    }
+
+    end {
+        if ($Device) { 
+            $DeviceStats
+        }
+        if ($Distribution) {
+            foreach ($DistributionStat in $DistributionStats) {
+            $DistributionStat
+            }
+
+        }
+        else {
+            $ServerStats
+        }
+        Remove-Variable -Name 'Sites', 'Device', 'DeviceStats', 'ServerStats', 'Distribution', 'Server', 'DistributionStat' -ErrorAction SilentlyContinue
     }
 
 }
