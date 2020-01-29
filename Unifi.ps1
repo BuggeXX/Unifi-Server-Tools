@@ -4,14 +4,33 @@ if (!(Test-Path -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi'))) {
 Function Add-UServerFile {
     param(
         [parameter(Mandatory = $true, Position = 0)]
+        [ValidatePattern("^(?:http(s)?:*)", ErrorMessage = 'Insert correct form of an URL <http|https://<server>:<port>>')]
+        [ValidateScript({[uri]::TryCreate($_, [System.UriKind]::Absolute, [ref]$null)}, ErrorMessage = 'Insert correct form of an URL <http|https://<server>:<port>>')]
         [array]$Server
     )
 
     foreach ($Item in $Server) {
-        $Credential = (Get-Credential -Message "Enter Credential with Superadmin privileges for $Item")
+        do {
+            try {
+                $Credential = (Get-Credential -Message "Enter Credential with Superadmin privileges for $Item")
+                $CredentialTMP = @{
+                    username = $Credential.UserName
+                    password = ([Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($Credential.Password)))
+                } | ConvertTo-Json
+                $Login = $null
+                $Login = Invoke-RestMethod -Uri "$Item/api/login" -Method Post -Body $CredentialTMP -ContentType "application/json; charset=utf-8" -SessionVariable myWebSession -SkipCertificateCheck
+            }
+            catch {
+                Write-Warning -Message "Login to $Item failed du to wrong credentials" 
+            }
+        }while ($Login.meta.rc -notlike 'ok')
+
+        $URISplit = $null
+        [uri]::TryCreate($Item, [System.UriKind]::Absolute, [ref]$URISplit)
         $Servers += @([PSCustomObject]@{
-                Server   = (($Item).Split(':'))[0]
-                Port     = (($Item).Split(':'))[1]
+                Protocol = $URISplit.Scheme
+                Server   = $URISplit.Host
+                Port     = $URISplit.Port
                 Exlude   = $false
                 UserName = $Credential.UserName
                 Password = $Credential.Password
@@ -292,8 +311,8 @@ Function Import-UData {
         }
     }
     return (@([PSCustomObject]@{
-                Sites      = $Sites
-                Server     = $Servers
+                Sites  = $Sites
+                Server = $Servers
             }))          
 } 
 
@@ -307,16 +326,17 @@ Function Get-USiteInformation {
     Write-Host 'Parsing all Sites - Please Wait'
     foreach ($Item in $Server) {
         if (Test-NetConnection -ComputerName $Item.Server -Port $Item.Port -InformationLevel Quiet) {
-            $URL = "https://$($Item.Server):$($Item.Port)"
+            $URL = "$($Item.Protocol)://$($Item.Server):$($Item.Port)"
             $Credential = @{
                 username = $Item.UserName
                 password = ([Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($Item.Password)))
             } | ConvertTo-Json
             try {
+                $Login = $null
                 $Login = Invoke-RestMethod -Uri "$URL/api/login" -Method Post -Body $Credential -ContentType "application/json; charset=utf-8" -SessionVariable myWebSession -SkipCertificateCheck
             }
             catch {
-                Write-Warning -Message "Login to https://$($Item.Server):$($Item.Port) failed du to wrong credentials" 
+                Write-Warning -Message "Login to $URL failed du to wrong credentials" 
             }
             if ($Login.meta.rc -eq 'ok') {
                 foreach ($Site in (Invoke-RestMethod -Uri "$URL/api/stat/sites" -WebSession $myWebSession -SkipCertificateCheck).data) {
