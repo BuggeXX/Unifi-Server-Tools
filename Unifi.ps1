@@ -8,26 +8,31 @@ Function Add-UServerFile {
     )
 
     foreach ($Item in $Server) {
+        $Credential = (Get-Credential -Message "Enter Credential with Superadmin privileges for $Item")
         $Servers += @([PSCustomObject]@{
-                Address = (($Item).Split(':'))[0]
-                Port    = (($Item).Split(':'))[1]
+                Server   = (($Item).Split(':'))[0]
+                Port     = (($Item).Split(':'))[1]
+                Exlude   = $false
+                UserName = $Credential.UserName
+                Password = $Credential.Password
             })
     }
-
     $Servers | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Server.xml') -Force | Out-Null
 }
 
-Function Add-UCredentialFile {
+Function Set-UServerFile {
     param(
-        [parameter(Mandatory = $false, Position = 0, ValueFromPipeline = $false)]
-        [psobject]$Credential
+        [array]$Exlude,
+        [array]$Include
     )
-
-    if (!($Credential)) {
-        $Credential = Get-Credential -Message 'Enter Credential with Superadmin privileges for Unifi Controller'
+    $Servers = (Import-UData -WithoutSite).Server
+    foreach ($Item in $Exlude) {
+        $Servers[(($Servers.Server).IndexOf($Item))].Exlude = $true
     }
-
-    $Credential | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Credentials.xml') -Force | Out-Null
+    foreach ($Item in $Include) {
+        $Servers[(($Servers.Server).IndexOf($Item))].Exlude = $false
+    }
+    $Servers | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Server.xml') -Force | Out-Null
 }
 
 Function Add-USiteFile {
@@ -38,11 +43,11 @@ Function Add-USiteFile {
     $UData = Import-UData -WithoutSite
 
     if ($Full) {
-        $Sites = Get-USiteInformation -Server $UData.Servers -Credential $UData.Credential -Full
+        $Sites = Get-USiteInformation -Server $UData.Server -Full
         $Sites | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\SitesFull.xml') -Force | Out-Null
     }
     else {
-        $Sites = Get-USiteInformation -Server $UData.Servers -Credential $UData.Credential
+        $Sites = Get-USiteInformation -Server $UData.Server
         $Sites | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Sites.xml') -Force | Out-Null
     }
 }
@@ -102,8 +107,8 @@ Function Open-USite {
     $ElementPassword = Get-SeElement -Driver $Driver -Name 'password' -Wait -Timeout 10
     $ElementLogin = Get-SeElement -Driver $Driver -Id 'loginButton' -Wait -Timeout 10
         
-    Send-SeKeys -Element $ElementUsername -Keys (($UData.Credential | ConvertFrom-Json).username)
-    Send-SeKeys -Element $ElementPassword -Keys (($UData.Credential | ConvertFrom-Json).password)
+    Send-SeKeys -Element $ElementUsername -Keys (($UData.Server.Credential | ConvertFrom-Json).username)
+    Send-SeKeys -Element $ElementPassword -Keys (($UData.Server.Credential | ConvertFrom-Json).password)
         
     Invoke-SeClick -Driver $Driver -Element $ElementLogin -JavaScriptClick
         
@@ -111,7 +116,7 @@ Function Open-USite {
     Enter-SeUrl $URL -Driver $Driver
 }
 
-Function Add-UProfile {    
+Function Add-UProfile {
     param(
         [switch]$Chrome,
         [switch]$Firefox,
@@ -246,44 +251,13 @@ Function Import-UData {
     )
 
     if (!($OnlySite)) {
-        #retriving credential data, if credentialfile found it will read it, else it will ask for credentials
-        try {
-            if (Test-Path -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Credentials.xml')) {
-                $Credential = Import-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Credentials.xml')
-                $Credential = @{
-                    username = $Credential.UserName
-                    password = ([Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($Credential.Password)))
-                } | ConvertTo-Json
-            }
-            elseif (!($Credential)) {
-                $Credential = Get-Credential -Message 'Enter Credential with Superadmin privileges for Unifi Controller'
-                $Credential = @{
-                    username = $Credential.UserName
-                    password = ([Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($Credential.Password)))
-                } | ConvertTo-Json
-            }
-        }
-        catch {
-            Write-Warning "$env:LOCALAPPDATA\Unifi\Credential.xml not found"
-            Write-Warning "Run Add-UCredentialFile first"
-            exit
-        }
-
-        #retriving server data, if serverfile found it will read it, else it will ask for server
+        #retriving server data
         try {
             if (Test-Path -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Server.xml')) {
-                if (Test-Path -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Server.xml')) {
-                    $Servers = Import-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Server.xml')
-                }
+                $Servers = Import-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Server.xml')
             }
             else {
-                $Server = Read-Host -Prompt 'Enter Server <https://[Server]:[Port]>'
-                foreach ($Item in $Server) {
-                    $Servers += @([PSCustomObject]@{
-                            Address = (($Item).Split(':'))[0]
-                            Port    = (($Item).Split(':'))[1]
-                        })
-                }
+                throw
             }
         }
         catch {
@@ -319,8 +293,7 @@ Function Import-UData {
     }
     return (@([PSCustomObject]@{
                 Sites      = $Sites
-                Servers    = $Servers
-                Credential = $Credential
+                Server     = $Servers
             }))          
 } 
 
@@ -328,20 +301,22 @@ Function Get-USiteInformation {
     param (
         [parameter(Mandatory = $true, Position = 0)]
         [array]$Server,
-        [parameter(Mandatory = $true, Position = 1)]
-        [psobject]$Credential,
         [switch]$Full
     )
 
     Write-Host 'Parsing all Sites - Please Wait'
     foreach ($Item in $Server) {
-        if (Test-NetConnection -ComputerName $Item.Address -Port $Item.Port -InformationLevel Quiet) {
-            $URL = "https://$($Item.Address):$($Item.Port)"
+        if (Test-NetConnection -ComputerName $Item.Server -Port $Item.Port -InformationLevel Quiet) {
+            $URL = "https://$($Item.Server):$($Item.Port)"
+            $Credential = @{
+                username = $Item.UserName
+                password = ([Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($Item.Password)))
+            } | ConvertTo-Json
             try {
                 $Login = Invoke-RestMethod -Uri "$URL/api/login" -Method Post -Body $Credential -ContentType "application/json; charset=utf-8" -SessionVariable myWebSession -SkipCertificateCheck
             }
             catch {
-                Write-Warning -Message "Login to https://$($Item.Address):$($Item.Port) failed du to wrong credentials" 
+                Write-Warning -Message "Login to https://$($Item.Server):$($Item.Port) failed du to wrong credentials" 
             }
             if ($Login.meta.rc -eq 'ok') {
                 foreach ($Site in (Invoke-RestMethod -Uri "$URL/api/stat/sites" -WebSession $myWebSession -SkipCertificateCheck).data) {
@@ -400,3 +375,5 @@ Function Search-USite {
     $Switch += "`n}"
     Invoke-Expression $Switch
 }
+
+Open-USite

@@ -17,7 +17,15 @@ Add-UCredentialFile -Credential (Get-Credential)
 ## Adding a Server source file
 ```powershell
 #export server as xml
+#each server will be added with the attribute <Exclude = $False>
 Add-UServerFile -Server 'server01:8443', 'server02:8443', 'server03:8443'
+```
+
+## Change the Server source file
+```powershell
+#will change the attribute <Exclude = $true>
+#servers with the attribute <Exclude = $true> will be exluded for a few functions
+Set-UServerFile -Exlude 'server03:8443'
 ```
 
 ## Adding a Site source file
