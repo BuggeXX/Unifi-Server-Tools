@@ -400,6 +400,3 @@ Function Search-USite {
     $Switch += "`n}"
     Invoke-Expression $Switch
 }
-
-Open-USite -Firefox
-Add-UProfile -Firefox
