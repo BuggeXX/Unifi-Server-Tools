@@ -55,10 +55,10 @@ Function Open-USite {
     )
 
     if ($Live) {
-        $UData = Import-UData -Live -NoJSON
+        $UData = Import-UData -Live
     }
     else {
-        $UData = Import-UData -NoJSON
+        $UData = Import-UData
     }
     $URL = Search-USite -UData $UData
     $DefaultBrowserName = (Get-Item -Path 'HKCU:\SOFTWARE\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice' | Get-ItemProperty).ProgId
@@ -158,10 +158,19 @@ Function Add-UProfile {
     }
 }
 
-Function Get-USiteURL {    
-    $UData = Import-UData
-    $URL = Search-USite -UData $UData
+Function Get-USiteURL {
+    param(
+        [switch]$Live
+    )
 
+    if ($Live) {
+        $UData = Import-UData -Live
+    }
+    else {
+        $UData = Import-UData
+    }
+    
+    $URL = Search-USite -UData $UData
     Write-Host -Object $URL
 }
 
