@@ -15,8 +15,6 @@ Function Add-UServerFile {
     }
 
     $Servers | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Server.xml') -Force | Out-Null
-    Remove-Variable -Name 'Server', 'Servers', 'Item' -ErrorAction SilentlyContinue
-
 }
 
 Function Add-UCredentialFile {
@@ -30,8 +28,6 @@ Function Add-UCredentialFile {
     }
 
     $Credential | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Credentials.xml') -Force | Out-Null
-    Remove-Variable -Name 'Credential' -ErrorAction SilentlyContinue
-
 }
 
 Function Add-USiteFile {
@@ -49,7 +45,6 @@ Function Add-USiteFile {
         $Sites = Get-USiteInformation -Server $UData.Servers -Credential $UData.Credential
         $Sites | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Sites.xml') -Force | Out-Null
     }
-    Remove-Variable -Name 'UData', 'Sites' -ErrorAction SilentlyContinue
 }
 
 Function Open-USite {
@@ -58,11 +53,12 @@ Function Open-USite {
         [switch]$Firefox,
         [switch]$Live
     )
+
     if ($Live) {
-        $UData = Import-UData -Live
+        $UData = Import-UData -Live -NoJSON
     }
     else {
-        $UData = Import-UData
+        $UData = Import-UData -NoJSON
     }
     $URL = Search-USite -UData $UData
     $DefaultBrowserName = (Get-Item -Path 'HKCU:\SOFTWARE\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice' | Get-ItemProperty).ProgId
@@ -107,15 +103,13 @@ Function Open-USite {
     $ElementPassword = Get-SeElement -Driver $Driver -Name 'password' -Wait -Timeout 10
     $ElementLogin = Get-SeElement -Driver $Driver -Id 'loginButton' -Wait -Timeout 10
         
-    Send-SeKeys -Element $ElementUsername -Keys (($Credential | ConvertFrom-Json).username)
-    Send-SeKeys -Element $ElementPassword -Keys (($Credential | ConvertFrom-Json).password)
+    Send-SeKeys -Element $ElementUsername -Keys (($UData.Credential | ConvertFrom-Json).username)
+    Send-SeKeys -Element $ElementPassword -Keys (($UData.Credential | ConvertFrom-Json).password)
         
     Invoke-SeClick -Driver $Driver -Element $ElementLogin -JavaScriptClick
         
     while ($Driver.Url -match 'login') { }
     Enter-SeUrl $URL -Driver $Driver
-
-    Remove-Variable -Name 'UData', 'Live', 'Switch', 'SelectionSite', 'i', 'DefaultBrowserName', 'Driver', 'ElementUsername', 'ElementPassword', 'ElementLogin', 'URL', 'Chrome', 'Firefox' -ErrorAction SilentlyContinue
 }
 
 Function Add-UProfile {    
@@ -124,6 +118,7 @@ Function Add-UProfile {
         [switch]$Firefox,
         [switch]$Refresh
     )
+
     if ($Chrome) {
         $ChromeProcessID = (Get-Process -Name '*Chrome*').ID
         if (Test-Path -Path "$env:LOCALAPPDATA\Unifi\Unifi") {
@@ -149,9 +144,7 @@ Function Add-UProfile {
             if ($ProcessID -notin $ChromeProcessID) {
                 Stop-Process -Id $ProcessID -Force -ErrorAction SilentlyContinue
             }
-
         }
-
     }
 
     if ($Firefox) {
@@ -161,11 +154,8 @@ Function Add-UProfile {
             if ($ProcessID -notin $FirefoxProcessID) {
                 Stop-Process -Id $ProcessID -Force -ErrorAction SilentlyContinue
             }
-
         }
-
     }
-    Remove-Variable -Name 'ChromeProcessID', 'ProcessID', 'Chrome', 'FirefoxProcessID', 'Firefox', 'ChromePath', 'FirefoxPath' -ErrorAction SilentlyContinue
 }
 
 Function Get-USiteURL {    
@@ -173,8 +163,6 @@ Function Get-USiteURL {
     $URL = Search-USite -UData $UData
 
     Write-Host -Object $URL
-    Remove-Variable -Name 'UData', 'URL', 'URL' -ErrorAction SilentlyContinue
-
 }
 
 Function Get-UServerStats {
@@ -182,7 +170,8 @@ Function Get-UServerStats {
         [switch]$Device,
         [switch]$Distribution,
         [switch]$Live
-    )    
+    ) 
+
     if ($Live) {
         $UData = Import-UData -Live -Full
     }
@@ -190,19 +179,18 @@ Function Get-UServerStats {
         $UData = Import-UData -OnlySite -Full 
     }
 
-
     if ($Device) {
         $DeviceStats = [PSCustomObject]@{
-            Upgradeable  = ($UData.Sites.Devices.data | Where-Object -Property upgradable -eq $true).Count
-            Unsupported  = ($UData.Sites.Devices.data | Where-Object -Property unsupported -eq $true).Count
-            Incompatible = ($UData.Sites.Devices.data | Where-Object -Property model_incompatible -eq $true).Count
-            Mesh         = ($UData.Sites.Devices.data | Where-Object -Property mesh_sta_vap_enabled -eq $true).Count
-            Locating     = ($UData.Sites.Devices.data | Where-Object -Property locating -eq $true).Count
-            Overheating  = ($UData.Sites.Devices.data | Where-Object -Property overheating -eq $true).Count
+            PendingUpdates = ($UData.Sites.Devices.data | Where-Object -Property upgradable -eq $true).Count
+            Unsupported    = ($UData.Sites.Devices.data | Where-Object -Property unsupported -eq $true).Count
+            Incompatible   = ($UData.Sites.Devices.data | Where-Object -Property model_incompatible -eq $true).Count
+            Mesh           = ($UData.Sites.Devices.data | Where-Object -Property mesh_sta_vap_enabled -eq $true).Count
+            Locating       = ($UData.Sites.Devices.data | Where-Object -Property locating -eq $true).Count
+            Overheating    = ($UData.Sites.Devices.data | Where-Object -Property overheating -eq $true).Count
         }
-
     }
-    if ($Distribution) {
+
+    elseif ($Distribution) {
         foreach ($Server in ($UData.Sites.Server | Sort-Object -Unique)) {
             $DistributionStats += @([PSCustomObject]@{ 
                     Server              = $Server
@@ -213,10 +201,9 @@ Function Get-UServerStats {
                     DevicesDisconnected = (($UData.Sites | Where-Object -Property Server -Match $Server).health.num_disconnected | Measure-Object -sum).sum
                     Clients             = (($UData.Sites | Where-Object -Property Server -Match $Server).health.num_user | Measure-Object -sum).sum
                 })
-
         }
-
     }
+
     else {
         $ServerStats = [PSCustomObject]@{
             Sites               = $UData.Sites.Count
@@ -225,25 +212,23 @@ Function Get-UServerStats {
             DevicesDisconnected = ($UData.Sites.health.num_disconnected | Measure-Object -sum).sum
             Clients             = ($UData.Sites.health.num_user | Measure-Object -sum).sum  
         }
-
     }
-
 
     if ($Device) { 
         $DeviceStats
     }
-    if ($Distribution) {
+    elseif ($Distribution) {
         foreach ($DistributionStat in $DistributionStats) {
             $DistributionStat
         }
-
     }
     else {
         $ServerStats
     }
-    Remove-Variable -Name 'Sites', 'Device', 'Live', 'DeviceStats', 'ServerStats', 'Distribution', 'UData', 'DistributionStat' -ErrorAction SilentlyContinue
 }
 
+
+#Helper Functions
 Function Import-UData {
     param(
         [switch]$Full,
@@ -251,6 +236,7 @@ Function Import-UData {
         [switch]$OnlySite,
         [switch]$WithoutSite
     )
+
     if (!($OnlySite)) {
         #retriving credential data, if credentialfile found it will read it, else it will ask for credentials
         try {
@@ -268,7 +254,6 @@ Function Import-UData {
                     password = ([Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($Credential.Password)))
                 } | ConvertTo-Json
             }
-
         }
         catch {
             Write-Warning "$env:LOCALAPPDATA\Unifi\Credential.xml not found"
@@ -278,14 +263,10 @@ Function Import-UData {
 
         #retriving server data, if serverfile found it will read it, else it will ask for server
         try {
-            if ((Test-Path -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Server.xml')) -or (Test-Path -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\ServerFull.xml'))) {
+            if (Test-Path -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Server.xml')) {
                 if (Test-Path -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Server.xml')) {
                     $Servers = Import-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Server.xml')
                 }
-                else {
-                    $Servers = Import-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\ServerFull.xml')
-                }
-
             }
             else {
                 $Server = Read-Host -Prompt 'Enter Server <https://[Server]:[Port]>'
@@ -295,25 +276,22 @@ Function Import-UData {
                             Port    = (($Item).Split(':'))[1]
                         })
                 }
-
             }
-
         }
         catch {
             Write-Warning "$env:LOCALAPPDATA\Unifi\Server.xml not found"
             Write-Warning "Run Add-UServerFile first"
             exit
         }
-
     }
 
     if (!($WithoutSite)) {
         #retriving site data
         if (($Live) -and ($Full)) {
-            $Sites = Get-USiteInformation -Server $Server -Credential $Credential -Full
+            $Sites = Get-USiteInformation -Server $Servers -Credential $Credential -Full
         }
         elseif ($Live) {
-            $Sites = Get-USiteInformation -Server $Server -Credential $Credential
+            $Sites = Get-USiteInformation -Server $Servers -Credential $Credential
         }
         else {
             try {
@@ -323,24 +301,19 @@ Function Import-UData {
                 else {
                     $Sites = Import-Clixml "$env:LOCALAPPDATA\Unifi\Sites.xml"
                 }
-
             }
             catch {
                 Write-Warning "$env:LOCALAPPDATA\Unifi\Sites.xml or $env:LOCALAPPDATA\Unifi\SitesFull.xml not found"
                 Write-Warning "Run Add-USiteFile -Full first"
                 exit
             }
-
         }
-
     }
     return (@([PSCustomObject]@{
                 Sites      = $Sites
                 Servers    = $Servers
                 Credential = $Credential
-            }))
-            
-    Remove-Variable -Name 'Credential', 'Servers', 'Server', 'Item', 'Lite', 'Full', 'Live', 'Sites', 'WithoutSite', 'OnlySite' -ErrorAction SilentlyContinue
+            }))          
 } 
 
 Function Get-USiteInformation {
@@ -351,6 +324,7 @@ Function Get-USiteInformation {
         [psobject]$Credential,
         [switch]$Full
     )
+
     Write-Host 'Parsing all Sites - Please Wait'
     foreach ($Item in $Server) {
         if (Test-NetConnection -ComputerName $Item.Address -Port $Item.Port -InformationLevel Quiet) {
@@ -365,7 +339,6 @@ Function Get-USiteInformation {
                 foreach ($Site in (Invoke-RestMethod -Uri "$URL/api/stat/sites" -WebSession $myWebSession -SkipCertificateCheck).data) {
                     if ($Full) {
                         $Sites += @([PSCustomObject]@{
-
                                 Server   = $URL
                                 SiteID   = $Site._id
                                 SiteURL  = $Site.name
@@ -376,20 +349,16 @@ Function Get-USiteInformation {
                     }
                     else {
                         $Sites += @([PSCustomObject]@{
-
                                 Server   = $URL
                                 SiteID   = $Site._id
                                 SiteURL  = $Site.name
                                 SiteName = $Site.desc
                             })
                     }
-
                 }
                 Invoke-RestMethod -Uri "$URL/api/logout" -Method Post -ContentType "application/json; charset=utf-8" -SessionVariable myWebSession -SkipCertificateCheck | Out-Null
             }
-
         }
-
     }
     return $Sites
 }
@@ -400,6 +369,7 @@ Function Search-USite {
         [psobject]$UData,
         [switch]$URL
     )
+
     do {
         do {
             $SelectionSite = $UData.Sites | Where-Object -Property SiteName -match (Read-Host -Prompt 'Search for Site Name / Customer ID (Enter for a list of all Sites)') -ErrorAction SilentlyContinue
@@ -417,16 +387,8 @@ Function Search-USite {
     
     $Switch = 'Switch($Selection){'
     for ($i = 1; $i -le $SelectionSite.length; $i++) {
-        #$Switch += "`n`t$i { Set-Variable -Name URL -Value '$($SelectionSite[$i-1].Server)/manage/site/$($SelectionSite[$i-1].SiteURL)/devices/1/100';  break }"
         $Switch += "`n`t$i {return '$($SelectionSite[$i-1].Server)/manage/site/$($SelectionSite[$i-1].SiteURL)/devices/1/100'}"
     }
     $Switch += "`n}"
     Invoke-Expression $Switch
-
-    #return $URL
 }
-#Open-USite -Chrome
-Get-USiteURL
-#Add-USiteFile
-
-Get-UServerStats -Distribution

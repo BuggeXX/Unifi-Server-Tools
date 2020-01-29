@@ -5,10 +5,10 @@
 #
 # Generated on: 24.01.2020
 #
-# Modified Elmar Niederkofler 27.01.2020
+# Modified Elmar Niederkofler 29.01.2020
 
 @{
-    ModuleVersion        = '1.3.0'
+    ModuleVersion        = '1.4.1'
     GUID                 = '6d390ab4-57aa-49ea-8bf0-93d1281297ec'
     Author               = 'Elmar Niederkofler'
     CompanyName          = 'Telmekom'
