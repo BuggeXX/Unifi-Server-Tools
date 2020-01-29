@@ -120,8 +120,8 @@ Function Add-UProfile {
 
     if ($Chrome) {
         $ChromeProcessID = (Get-Process -Name '*Chrome*').ID
-        if (Test-Path -Path "$env:LOCALAPPDATA\Unifi\Unifi") {
-            Remove-Item -Path "$env:LOCALAPPDATA\Unifi\Unifi" -Force -Recurse
+        if ((Test-Path -Path "$env:LOCALAPPDATA\Unifi\Chrome\Unifi") -and ($Refresh)) {
+            Remove-Item -Path "$env:LOCALAPPDATA\Unifi\Chrome\Unifi" -Force -Recurse
         }
         Write-Warning -Message 'Creating new profile, please wait'
         $ChromePath = Get-Item (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe').'(Default)'
@@ -129,8 +129,8 @@ Function Add-UProfile {
 
     if ($Firefox) {
         $FirefoxProcessID = (Get-Process -Name '*Firefox*').ID
-        if (Test-Path -Path "$env:LOCALAPPDATA\Unifi\Unifi") {
-            Remove-Item -Path "$env:LOCALAPPDATA\Unifi\Unifi" -Force -Recurse
+        if ((Test-Path -Path "$env:LOCALAPPDATA\Unifi\Firefox\Unifi") -and ($Refresh)) {
+            Remove-Item -Path "$env:LOCALAPPDATA\Unifi\Firefox\Unifi" -Force -Recurse
         }
         Write-Warning -Message 'Creating new profile, please wait'
         $FirefoxPath = Get-Item (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\firefox.exe').'(Default)'
@@ -400,3 +400,6 @@ Function Search-USite {
     $Switch += "`n}"
     Invoke-Expression $Switch
 }
+
+Open-USite -Firefox
+Add-UProfile -Firefox

@@ -40,6 +40,7 @@ Add-UProfile -Chrome
 ## Open a Unifi Site
 ```powershell
 #avoid using -Live, it will put the servers under stress
+#Firefox with a created profile will launch, but the driver will not be created
 
 #will provide a search for a site name and open it with the default browser (-Chrome or -Firefox will force the named browser)
 #EdgeChromium or Edge will be used as default if neither Chrome or Firefox is installed
