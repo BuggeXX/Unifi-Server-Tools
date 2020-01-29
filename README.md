@@ -29,16 +29,17 @@ Add-USiteFile -Full
 ```
 
 ## Adding a Browser profile directory
-Note: -Refresh is not yet implemented, will be used to recreate the profile if there are problems with it
-Note: -Firefox works and will create a profile, however it is not yet possible to use it with the selenium driver
+-Refresh is not yet implemented, will be used to recreate the profile if there are problems with it
+-Firefox works and will create a profile, however it is not yet possible to use it with the selenium driver
 ```powershell
 #creating a browser profile to keep site settings for each browsing
 Add-UProfile -Chrome
 ```
 
-Note: each following function will read correspondenting data xml file
+
+### Note: each following function will read correspondenting data xml file
 ## Open a Unifi Site
-Note: avoid using -Live, it will put the servers under stress
+avoid using -Live, it will put the servers under stress
 ```powershell
 #will provide a search for a site name and open it with the default browser (-Chrome or -Firefox will force the named browser)
 #EdgeChromium or Edge will be used as default if neither Chrome or Firefox is installed
@@ -56,8 +57,8 @@ Get-USiteURL
 ```
 
 ## Getting different stats from the servers
-Note: this function needs (Add-USiteFile -Full) to be run before or us the -Live parameter
-Note: avoid using -Live, it will put the servers under stress
+this function needs (Add-USiteFile -Full) to be run before or us the -Live parameter
+avoid using -Live, it will put the servers under stress
 ```powershell
 #default without parameters will get a total overview from all servers
 #-Distribution will create stats for each server (like how many sites and devices are on any single server)
