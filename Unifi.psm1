@@ -75,8 +75,7 @@ Function Open-USite {
 
     elseif (($DefaultBrowserName -like 'FirefoxURL-308046B0AF4A39CB') -or ($Firefox)) {
         if (Test-Path -Path "$env:LOCALAPPDATA\Unifi\Firefox\Unifi") {
-            $Args = "`" -profile`"", " Unifi"
-            $Driver = Start-SeFirefox -StartURL $URL -Maximized -Quiet -Arguments $Args
+            $Driver = Start-SeFirefox -StartURL $URL -Maximized -Quiet -Arguments '-profile', "$env:LOCALAPPDATA\Unifi\Firefox\Unifi"
         }
         else {
             $Driver = Start-SeFirefox -StartURL $URL -Maximized -Quiet
@@ -169,7 +168,7 @@ Function Get-USiteURL {
     else {
         $UData = Import-UData
     }
-    
+
     $URL = Search-USite -UData $UData
     Write-Host -Object $URL
 }

@@ -30,7 +30,6 @@ Add-USiteFile -Full
 ## Adding a Browser profile directory
 ```powershell
 #-Refresh is not yet implemented, will be used to recreate the profile if there are problems with it
-#-Firefox works and will create a profile, however it is not yet possible to use it with the selenium driver
 
 #creating a browser profile to keep site settings for each browsing
 Add-UProfile -Chrome
