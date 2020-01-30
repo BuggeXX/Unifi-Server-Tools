@@ -4,30 +4,77 @@ if (!(Test-Path -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi'))) {
 Function Add-UServerFile {
     param(
         [parameter(Mandatory = $true, Position = 0)]
+        [ValidatePattern("^(?:http(s)?:*)", ErrorMessage = 'Insert correct form of an URL <http|https://<server>:<port>>')]
+        [ValidateScript( { [uri]::TryCreate($_, [System.UriKind]::Absolute, [ref]$null) }, ErrorMessage = 'Insert correct form of an URL <http|https://<server>:<port>>')]
         [array]$Server
     )
 
     foreach ($Item in $Server) {
+        $ServerUnreachable = $false
+        do {
+            try {
+                $URISplit = $null
+                while ($ServerUnreachable) {
+                    [ValidatePattern("^(?:http(s)?:*)", ErrorMessage = 'Insert correct form of an URL <http|https://<server>:<port>>')]
+                    [ValidateScript( { [uri]::TryCreate($_, [System.UriKind]::Absolute, [ref]$null) }, ErrorMessage = 'Insert correct form of an URL <http|https://<server>:<port>>')]        
+                    $Item = Read-Host -Prompt 'Insert correct form of an URL <http|https://<server>:<port>>'
+                    if ($Item) {
+                        $ServerUnreachable = $false
+                    }
+                }
+                [uri]::TryCreate($Item, [System.UriKind]::Absolute, [ref]$URISplit) | Out-Null
+                $Reachable = Test-NetConnection -ComputerName $URISplit.Host -Port $URISplit.Port -InformationLevel Quiet
+                if (!($Reachable)) {
+                    throw
+                }
+            }
+            catch {
+                Remove-Variable 'Item'
+                $ServerUnreachable = $true
+            }
+        }while (!($Reachable))
+
+        do {
+            try {
+                $Credential = (Get-Credential -Message "Enter Credential with Superadmin privileges for $Item")
+                $CredentialTMP = @{
+                    username = $Credential.UserName
+                    password = ([Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($Credential.Password)))
+                } | ConvertTo-Json
+                $Login = $null
+                $Login = Invoke-RestMethod -Uri "$Item/api/login" -Method Post -Body $CredentialTMP -ContentType "application/json; charset=utf-8" -SessionVariable myWebSession -SkipCertificateCheck
+            }
+            catch {
+                Write-Warning -Message "Login to $Item failed du to wrong credentials" 
+            }
+        }while ($Login.meta.rc -notlike 'ok')
+
         $Servers += @([PSCustomObject]@{
-                Address = (($Item).Split(':'))[0]
-                Port    = (($Item).Split(':'))[1]
+                Protocol = $URISplit.Scheme
+                Host     = $URISplit.Host
+                Port     = $URISplit.Port
+                Server   = "$($URISplit.Scheme)://$($URISplit.Authority)"
+                Exclude  = $false
+                UserName = $Credential.UserName
+                Password = $Credential.Password
             })
     }
-
     $Servers | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Server.xml') -Force | Out-Null
 }
 
-Function Add-UCredentialFile {
+Function Set-UServerFile {
     param(
-        [parameter(Mandatory = $false, Position = 0, ValueFromPipeline = $false)]
-        [psobject]$Credential
+        [array]$Exlude,
+        [array]$Include
     )
-
-    if (!($Credential)) {
-        $Credential = Get-Credential -Message 'Enter Credential with Superadmin privileges for Unifi Controller'
+    $Servers = (Import-UData -WithoutSite).Host
+    foreach ($Item in $Exlude) {
+        $Servers[(($Servers.Host).IndexOf($Item))].Exlude = $true
     }
-
-    $Credential | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Credentials.xml') -Force | Out-Null
+    foreach ($Item in $Include) {
+        $Servers[(($Servers.Host).IndexOf($Item))].Exlude = $false
+    }
+    $Servers | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Server.xml') -Force | Out-Null
 }
 
 Function Add-USiteFile {
@@ -38,11 +85,11 @@ Function Add-USiteFile {
     $UData = Import-UData -WithoutSite
 
     if ($Full) {
-        $Sites = Get-USiteInformation -Server $UData.Servers -Credential $UData.Credential -Full
+        $Sites = Get-USiteInformation -Server $UData.Host -Full
         $Sites | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\SitesFull.xml') -Force | Out-Null
     }
     else {
-        $Sites = Get-USiteInformation -Server $UData.Servers -Credential $UData.Credential
+        $Sites = Get-USiteInformation -Server $UData.Host
         $Sites | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Sites.xml') -Force | Out-Null
     }
 }
@@ -61,6 +108,31 @@ Function Open-USite {
         $UData = Import-UData
     }
     $URL = Search-USite -UData $UData
+
+    try {
+        $URISplit = $null
+        [uri]::TryCreate($URL, [System.UriKind]::Absolute, [ref]$URISplit) | Out-Null
+        $Reachable = Test-NetConnection -ComputerName $URISplit.Host -Port $URISplit.Port -InformationLevel Quiet
+        if (!($Reachable)) {
+            throw
+        }
+        $Credential = @{
+            username = ($UData.Server[(($UData.Server.Host).IndexOf($URISplit.Host))].UserName)
+            password = ([Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR(($UData.Server[(($UData.Server.Host).IndexOf($URISplit.Host))].Password))))
+        } | ConvertTo-Json
+        $Login = $null
+        $Login = Invoke-RestMethod -Uri "$($URISplit.Scheme)://$($URISplit.Authority)/api/login" -Method Post -Body $Credential -ContentType "application/json; charset=utf-8" -SessionVariable myWebSession -SkipCertificateCheck
+        if ($Login.meta.rc -notlike 'ok') {
+            throw
+        }
+    }
+    catch {
+        if ($Reachable) {
+            Write-Warning -Message "Login to $($URISplit.Host):$($URISplit.Port) failed"
+        }
+        exit
+    }
+    Invoke-RestMethod -Uri "$($URISplit.Scheme)://$($URISplit.Authority)/api/logout" -Method Post -ContentType "application/json; charset=utf-8" -SessionVariable myWebSession -SkipCertificateCheck | Out-Null
     $DefaultBrowserName = (Get-Item -Path 'HKCU:\SOFTWARE\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice' | Get-ItemProperty).ProgId
 
     if (($DefaultBrowserName -like 'ChromeHTML') -or ($Chrome)) {
@@ -102,8 +174,8 @@ Function Open-USite {
     $ElementPassword = Get-SeElement -Driver $Driver -Name 'password' -Wait -Timeout 10
     $ElementLogin = Get-SeElement -Driver $Driver -Id 'loginButton' -Wait -Timeout 10
         
-    Send-SeKeys -Element $ElementUsername -Keys (($UData.Credential | ConvertFrom-Json).username)
-    Send-SeKeys -Element $ElementPassword -Keys (($UData.Credential | ConvertFrom-Json).password)
+    Send-SeKeys -Element $ElementUsername -Keys (($Credential | ConvertFrom-Json).username)
+    Send-SeKeys -Element $ElementPassword -Keys (($Credential | ConvertFrom-Json).password)
         
     Invoke-SeClick -Driver $Driver -Element $ElementLogin -JavaScriptClick
         
@@ -111,7 +183,7 @@ Function Open-USite {
     Enter-SeUrl $URL -Driver $Driver
 }
 
-Function Add-UProfile {    
+Function Add-UProfile {
     param(
         [switch]$Chrome,
         [switch]$Firefox,
@@ -184,25 +256,27 @@ Function Get-UServerStats {
         $UData = Import-UData -Live -Full
     }
     else {
-        $UData = Import-UData -OnlySite -Full 
+        $UData = Import-UData -Full 
     }
 
     if ($Device) {
-        $DeviceStats = [PSCustomObject]@{
-            PendingUpdates = ($UData.Sites.Devices.data | Where-Object -Property upgradable -eq $true).Count
-            Unsupported    = ($UData.Sites.Devices.data | Where-Object -Property unsupported -eq $true).Count
-            Incompatible   = ($UData.Sites.Devices.data | Where-Object -Property model_incompatible -eq $true).Count
-            Mesh           = ($UData.Sites.Devices.data | Where-Object -Property mesh_sta_vap_enabled -eq $true).Count
-            Locating       = ($UData.Sites.Devices.data | Where-Object -Property locating -eq $true).Count
-            Overheating    = ($UData.Sites.Devices.data | Where-Object -Property overheating -eq $true).Count
+        foreach ($Server in ($UData.Server | Where-Object -Property Exclude -eq $false).Server) {
+            $DeviceStats = [PSCustomObject]@{
+                PendingUpdates = ((($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property upgradable -eq $true).count) + $DeviceStats.PendingUpdates
+                Unsupported    = ((($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property unsupported -eq $true).count) + $DeviceStats.Unsupported
+                Incompatible   = ((($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property model_incompatible -eq $true).count) + $DeviceStats.Incompatible
+                Mesh           = ((($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property mesh_sta_vap_enabled -eq $true).count) + $DeviceStats.Mesh
+                Locating       = ((($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property locating -eq $true).count) + $DeviceStats.Locating
+                Overheating    = ((($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property overheating -eq $true).count) + $DeviceStats.Overheating
+            }
         }
     }
-
+    
     elseif ($Distribution) {
-        foreach ($Server in ($UData.Sites.Server | Sort-Object -Unique)) {
+        foreach ($Server in ($UData.Server | Where-Object -Property Exclude -eq $false).Server) {
             $DistributionStats += @([PSCustomObject]@{ 
                     Server              = $Server
-                    Sites               = (($UData.Sites | Where-Object -Property Server -Match $Server).Count)
+                    Sites               = ($UData.Sites | Where-Object -Property Server -Match $Server).Count
                     PendingUpdates      = (($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data.upgradable | Measure-Object -sum).sum
                     DevicesAdopted      = (($UData.Sites | Where-Object -Property Server -Match $Server).health.num_adopted | Measure-Object -sum).sum
                     DevicesOnline       = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_ap | Measure-Object -sum).sum) + ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_sw | Measure-Object -sum).sum)
@@ -213,12 +287,14 @@ Function Get-UServerStats {
     }
 
     else {
-        $ServerStats = [PSCustomObject]@{
-            Sites               = $UData.Sites.Count
-            DevicesAdopted      = ($UData.Sites.health.num_adopted | Measure-Object -sum).sum
-            DevicesOnline       = (($UData.Sites.health.num_ap | Measure-Object -sum).sum) + (($UData.Sites.health.num_sw | Measure-Object -sum).sum)
-            DevicesDisconnected = ($UData.Sites.health.num_disconnected | Measure-Object -sum).sum
-            Clients             = ($UData.Sites.health.num_user | Measure-Object -sum).sum  
+        foreach ($Server in ($UData.Server | Where-Object -Property Exclude -eq $false).Server) {
+            $ServerStats = [PSCustomObject]@{
+                Sites               = (($UData.Sites | Where-Object -Property Server -Match $Server).Count) + $ServerStats.Sites
+                DevicesAdopted      = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_adopted).count) + $ServerStats.DevicesAdopted
+                DevicesOnline       = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_ap).count) + ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_sw).count) + $ServerStats.DevicesOnline
+                DevicesDisconnected = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_disconnected).count) + $ServerStats.DevicesDisconnected
+                Clients             = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_user).count) + $ServerStats.Clients 
+            }
         }
     }
 
@@ -235,7 +311,6 @@ Function Get-UServerStats {
     }
 }
 
-
 #Helper Functions
 Function Import-UData {
     param(
@@ -246,44 +321,13 @@ Function Import-UData {
     )
 
     if (!($OnlySite)) {
-        #retriving credential data, if credentialfile found it will read it, else it will ask for credentials
-        try {
-            if (Test-Path -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Credentials.xml')) {
-                $Credential = Import-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Credentials.xml')
-                $Credential = @{
-                    username = $Credential.UserName
-                    password = ([Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($Credential.Password)))
-                } | ConvertTo-Json
-            }
-            elseif (!($Credential)) {
-                $Credential = Get-Credential -Message 'Enter Credential with Superadmin privileges for Unifi Controller'
-                $Credential = @{
-                    username = $Credential.UserName
-                    password = ([Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($Credential.Password)))
-                } | ConvertTo-Json
-            }
-        }
-        catch {
-            Write-Warning "$env:LOCALAPPDATA\Unifi\Credential.xml not found"
-            Write-Warning "Run Add-UCredentialFile first"
-            exit
-        }
-
-        #retriving server data, if serverfile found it will read it, else it will ask for server
+        #retriving server data
         try {
             if (Test-Path -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Server.xml')) {
-                if (Test-Path -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Server.xml')) {
-                    $Servers = Import-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Server.xml')
-                }
+                $Servers = Import-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Server.xml')
             }
             else {
-                $Server = Read-Host -Prompt 'Enter Server <https://[Server]:[Port]>'
-                foreach ($Item in $Server) {
-                    $Servers += @([PSCustomObject]@{
-                            Address = (($Item).Split(':'))[0]
-                            Port    = (($Item).Split(':'))[1]
-                        })
-                }
+                throw
             }
         }
         catch {
@@ -318,9 +362,8 @@ Function Import-UData {
         }
     }
     return (@([PSCustomObject]@{
-                Sites      = $Sites
-                Servers    = $Servers
-                Credential = $Credential
+                Sites  = $Sites
+                Server = $Servers
             }))          
 } 
 
@@ -328,45 +371,55 @@ Function Get-USiteInformation {
     param (
         [parameter(Mandatory = $true, Position = 0)]
         [array]$Server,
-        [parameter(Mandatory = $true, Position = 1)]
-        [psobject]$Credential,
         [switch]$Full
     )
 
     Write-Host 'Parsing all Sites - Please Wait'
     foreach ($Item in $Server) {
-        if (Test-NetConnection -ComputerName $Item.Address -Port $Item.Port -InformationLevel Quiet) {
-            $URL = "https://$($Item.Address):$($Item.Port)"
-            try {
-                $Login = Invoke-RestMethod -Uri "$URL/api/login" -Method Post -Body $Credential -ContentType "application/json; charset=utf-8" -SessionVariable myWebSession -SkipCertificateCheck
+        try {
+            $URL = "$($Item.Protocol)://$($Item.Server):$($Item.Port)"
+            $Reachable = Test-NetConnection -ComputerName $Item.Server -Port $Item.Port -InformationLevel Quiet
+            if (!($Reachable)) {
+                throw
             }
-            catch {
-                Write-Warning -Message "Login to https://$($Item.Address):$($Item.Port) failed du to wrong credentials" 
-            }
-            if ($Login.meta.rc -eq 'ok') {
-                foreach ($Site in (Invoke-RestMethod -Uri "$URL/api/stat/sites" -WebSession $myWebSession -SkipCertificateCheck).data) {
-                    if ($Full) {
-                        $Sites += @([PSCustomObject]@{
-                                Server   = $URL
-                                SiteID   = $Site._id
-                                SiteURL  = $Site.name
-                                SiteName = $Site.desc
-                                Health   = $Site.health
-                                Devices  = Invoke-RestMethod -Uri "$URL/api/s/$($Site.Name)/stat/device" -WebSession $myWebSession -SkipCertificateCheck
-                            })
-                    }
-                    else {
-                        $Sites += @([PSCustomObject]@{
-                                Server   = $URL
-                                SiteID   = $Site._id
-                                SiteURL  = $Site.name
-                                SiteName = $Site.desc
-                            })
-                    }
-                }
-                Invoke-RestMethod -Uri "$URL/api/logout" -Method Post -ContentType "application/json; charset=utf-8" -SessionVariable myWebSession -SkipCertificateCheck | Out-Null
+            $Credential = @{
+                username = $Item.UserName
+                password = ([Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($Item.Password)))
+            } | ConvertTo-Json
+            $Login = $null
+            $Login = Invoke-RestMethod -Uri "$URL/api/login" -Method Post -Body $Credential -ContentType "application/json; charset=utf-8" -SessionVariable myWebSession -SkipCertificateCheck
+            if ($Login.meta.rc -notlike 'ok') {
+                throw
             }
         }
+        catch {
+            if ($Reachable) {
+                Write-Warning -Message "Login to $($Item.Server):$($Item.Port) failed"
+            }
+            exit
+        }
+
+        foreach ($Site in (Invoke-RestMethod -Uri "$URL/api/stat/sites" -WebSession $myWebSession -SkipCertificateCheck).data) {
+            if ($Full) {
+                $Sites += @([PSCustomObject]@{
+                        Server   = $URL
+                        SiteID   = $Site._id
+                        SiteURL  = $Site.name
+                        SiteName = $Site.desc
+                        Health   = $Site.health
+                        Devices  = Invoke-RestMethod -Uri "$URL/api/s/$($Site.Name)/stat/device" -WebSession $myWebSession -SkipCertificateCheck
+                    })
+            }
+            else {
+                $Sites += @([PSCustomObject]@{
+                        Server   = $URL
+                        SiteID   = $Site._id
+                        SiteURL  = $Site.name
+                        SiteName = $Site.desc
+                    })
+            }
+        }
+        Invoke-RestMethod -Uri "$URL/api/logout" -Method Post -ContentType "application/json; charset=utf-8" -SessionVariable myWebSession -SkipCertificateCheck | Out-Null
     }
     return $Sites
 }
