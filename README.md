@@ -20,7 +20,7 @@ Add-UServerFile -Server 'https://server01:8443', 'https://server02:8443', 'https
 ```powershell
 #will change the attribute <Exclude = $true>
 #servers with the attribute <Exclude = $true> will be exluded for a few functions
-Set-UServerFile -Exlude 'server03:8443'
+Set-UServerFile -Exlude 'https://server03:8443'
 ```
 
 ## Adding a Site source file
@@ -64,6 +64,7 @@ Get-USiteURL
 ```powershell
 #this function needs (Add-USiteFile -Full) to be run before or us the -Live parameter
 #avoid using -Live, it will put the servers under stress
+#servers with parameter <Exluded = $true> will be ignored
 
 #default without parameters will get a total overview from all servers
 #-Distribution will create stats for each server (like how many sites and devices are on any single server)
