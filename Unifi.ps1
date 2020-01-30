@@ -51,9 +51,10 @@ Function Add-UServerFile {
 
         $Servers += @([PSCustomObject]@{
                 Protocol = $URISplit.Scheme
-                Server   = $URISplit.Host
+                Host     = $URISplit.Host
                 Port     = $URISplit.Port
-                Exlude   = $false
+                Server   = "$($URISplit.Scheme)://$($URISplit.Authority)"
+                Exclude  = $false
                 UserName = $Credential.UserName
                 Password = $Credential.Password
             })
@@ -66,12 +67,12 @@ Function Set-UServerFile {
         [array]$Exlude,
         [array]$Include
     )
-    $Servers = (Import-UData -WithoutSite).Server
+    $Servers = (Import-UData -WithoutSite).Host
     foreach ($Item in $Exlude) {
-        $Servers[(($Servers.Server).IndexOf($Item))].Exlude = $true
+        $Servers[(($Servers.Host).IndexOf($Item))].Exlude = $true
     }
     foreach ($Item in $Include) {
-        $Servers[(($Servers.Server).IndexOf($Item))].Exlude = $false
+        $Servers[(($Servers.Host).IndexOf($Item))].Exlude = $false
     }
     $Servers | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Server.xml') -Force | Out-Null
 }
@@ -84,11 +85,11 @@ Function Add-USiteFile {
     $UData = Import-UData -WithoutSite
 
     if ($Full) {
-        $Sites = Get-USiteInformation -Server $UData.Server -Full
+        $Sites = Get-USiteInformation -Server $UData.Host -Full
         $Sites | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\SitesFull.xml') -Force | Out-Null
     }
     else {
-        $Sites = Get-USiteInformation -Server $UData.Server
+        $Sites = Get-USiteInformation -Server $UData.Host
         $Sites | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Sites.xml') -Force | Out-Null
     }
 }
@@ -116,8 +117,8 @@ Function Open-USite {
             throw
         }
         $Credential = @{
-            username = ($UData.Server[(($UData.Server.Server).IndexOf($URISplit.Host))].UserName)
-            password = ([Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR(($UData.Server[(($UData.Server.Server).IndexOf($URISplit.Host))].Password))))
+            username = ($UData.Server[(($UData.Server.Host).IndexOf($URISplit.Host))].UserName)
+            password = ([Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR(($UData.Server[(($UData.Server.Host).IndexOf($URISplit.Host))].Password))))
         } | ConvertTo-Json
         $Login = $null
         $Login = Invoke-RestMethod -Uri "$($URISplit.Scheme)://$($URISplit.Authority)/api/login" -Method Post -Body $Credential -ContentType "application/json; charset=utf-8" -SessionVariable myWebSession -SkipCertificateCheck
@@ -255,7 +256,7 @@ Function Get-UServerStats {
         $UData = Import-UData -Live -Full
     }
     else {
-        $UData = Import-UData -OnlySite -Full 
+        $UData = Import-UData -Full 
     }
 
     if ($Device) {
@@ -268,12 +269,12 @@ Function Get-UServerStats {
             Overheating    = ($UData.Sites.Devices.data | Where-Object -Property overheating -eq $true).Count
         }
     }
-
+    
     elseif ($Distribution) {
-        foreach ($Server in ($UData.Sites.Server | Sort-Object -Unique)) {
+        foreach ($Server in ($UData.Server | Where-Object -Property Exclude -eq $false).Server) {
             $DistributionStats += @([PSCustomObject]@{ 
                     Server              = $Server
-                    Sites               = (($UData.Sites | Where-Object -Property Server -Match $Server).Count)
+                    Sites               = ($UData.Sites | Where-Object -Property Server -Match $Server).Count
                     PendingUpdates      = (($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data.upgradable | Measure-Object -sum).sum
                     DevicesAdopted      = (($UData.Sites | Where-Object -Property Server -Match $Server).health.num_adopted | Measure-Object -sum).sum
                     DevicesOnline       = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_ap | Measure-Object -sum).sum) + ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_sw | Measure-Object -sum).sum)
@@ -305,7 +306,6 @@ Function Get-UServerStats {
         $ServerStats
     }
 }
-
 
 #Helper Functions
 Function Import-UData {
@@ -449,6 +449,3 @@ Function Search-USite {
     $Switch += "`n}"
     Invoke-Expression $Switch
 }
-
-#Add-USiteFile
-#Open-USite -Chrome
