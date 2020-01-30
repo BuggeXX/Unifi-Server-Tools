@@ -85,11 +85,11 @@ Function Add-USiteFile {
     $UData = Import-UData -WithoutSite
 
     if ($Full) {
-        $Sites = Get-USiteInformation -Server $UData.Host -Full
+        $Sites = Get-USiteInformation -Server $UData.Server -Full
         $Sites | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\SitesFull.xml') -Force | Out-Null
     }
     else {
-        $Sites = Get-USiteInformation -Server $UData.Host
+        $Sites = Get-USiteInformation -Server $UData.Server
         $Sites | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Sites.xml') -Force | Out-Null
     }
 }
@@ -401,7 +401,7 @@ Function Get-USiteInformation {
         foreach ($Site in (Invoke-RestMethod -Uri "$($Item.Server)/api/stat/sites" -WebSession $myWebSession -SkipCertificateCheck).data) {
             if ($Full) {
                 $Sites += @([PSCustomObject]@{
-                        Server   = $URL
+                        Server   = $Item.Server
                         SiteID   = $Site._id
                         SiteURL  = $Site.name
                         SiteName = $Site.desc
@@ -411,7 +411,7 @@ Function Get-USiteInformation {
             }
             else {
                 $Sites += @([PSCustomObject]@{
-                        Server   = $URL
+                        Server   = $Item.Server
                         SiteID   = $Site._id
                         SiteURL  = $Site.name
                         SiteName = $Site.desc
