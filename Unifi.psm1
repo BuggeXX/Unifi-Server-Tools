@@ -290,10 +290,10 @@ Function Get-UServerStats {
         foreach ($Server in ($UData.Server | Where-Object -Property Exclude -eq $false).Server) {
             $ServerStats = [PSCustomObject]@{
                 Sites               = (($UData.Sites | Where-Object -Property Server -Match $Server).Count) + $ServerStats.Sites
-                DevicesAdopted      = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_adopted).count) + $ServerStats.DevicesAdopted
-                DevicesOnline       = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_ap).count) + ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_sw).count) + $ServerStats.DevicesOnline
-                DevicesDisconnected = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_disconnected).count) + $ServerStats.DevicesDisconnected
-                Clients             = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_user).count) + $ServerStats.Clients 
+                DevicesAdopted      = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_adopted| Measure-Object -sum).sum) + $ServerStats.DevicesAdopted
+                DevicesOnline       = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_ap | Measure-Object -sum).sum) + ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_sw | Measure-Object -sum).sum) + $ServerStats.DevicesOnline
+                DevicesDisconnected = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_disconnected | Measure-Object -sum).sum) + $ServerStats.DevicesDisconnected
+                Clients             = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_user | Measure-Object -sum).sum) + $ServerStats.Clients 
             }
         }
     }
