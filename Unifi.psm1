@@ -85,11 +85,11 @@ Function Add-USiteFile {
     $UData = Import-UData -WithoutSite
 
     if ($Full) {
-        $Sites = Get-USiteInformation -Server $UData.Host -Full
+        $Sites = Get-USiteInformation -Server $UData.Server -Full
         $Sites | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\SitesFull.xml') -Force | Out-Null
     }
     else {
-        $Sites = Get-USiteInformation -Server $UData.Host
+        $Sites = Get-USiteInformation -Server $UData.Server
         $Sites | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Sites.xml') -Force | Out-Null
     }
 }
@@ -340,10 +340,10 @@ Function Import-UData {
     if (!($WithoutSite)) {
         #retriving site data
         if (($Live) -and ($Full)) {
-            $Sites = Get-USiteInformation -Server $Servers -Credential $Credential -Full
+            $Sites = Get-USiteInformation -Server $Servers -Full
         }
         elseif ($Live) {
-            $Sites = Get-USiteInformation -Server $Servers -Credential $Credential
+            $Sites = Get-USiteInformation -Server $Servers
         }
         else {
             try {
@@ -377,8 +377,7 @@ Function Get-USiteInformation {
     Write-Host 'Parsing all Sites - Please Wait'
     foreach ($Item in $Server) {
         try {
-            $URL = "$($Item.Protocol)://$($Item.Server):$($Item.Port)"
-            $Reachable = Test-NetConnection -ComputerName $Item.Server -Port $Item.Port -InformationLevel Quiet
+            $Reachable = Test-NetConnection -ComputerName $Item.Host -Port $Item.Port -InformationLevel Quiet
             if (!($Reachable)) {
                 throw
             }
@@ -387,39 +386,39 @@ Function Get-USiteInformation {
                 password = ([Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($Item.Password)))
             } | ConvertTo-Json
             $Login = $null
-            $Login = Invoke-RestMethod -Uri "$URL/api/login" -Method Post -Body $Credential -ContentType "application/json; charset=utf-8" -SessionVariable myWebSession -SkipCertificateCheck
+            $Login = Invoke-RestMethod -Uri "$($Item.Server)/api/login" -Method Post -Body $Credential -ContentType "application/json; charset=utf-8" -SessionVariable myWebSession -SkipCertificateCheck
             if ($Login.meta.rc -notlike 'ok') {
                 throw
             }
         }
         catch {
             if ($Reachable) {
-                Write-Warning -Message "Login to $($Item.Server):$($Item.Port) failed"
+                Write-Warning -Message "Login to $($Item.Server) failed"
             }
             exit
         }
 
-        foreach ($Site in (Invoke-RestMethod -Uri "$URL/api/stat/sites" -WebSession $myWebSession -SkipCertificateCheck).data) {
+        foreach ($Site in (Invoke-RestMethod -Uri "$($Item.Server)/api/stat/sites" -WebSession $myWebSession -SkipCertificateCheck).data) {
             if ($Full) {
                 $Sites += @([PSCustomObject]@{
-                        Server   = $URL
+                        Server   = $Item.Server
                         SiteID   = $Site._id
                         SiteURL  = $Site.name
                         SiteName = $Site.desc
                         Health   = $Site.health
-                        Devices  = Invoke-RestMethod -Uri "$URL/api/s/$($Site.Name)/stat/device" -WebSession $myWebSession -SkipCertificateCheck
+                        Devices  = Invoke-RestMethod -Uri "$($Item.Server)/api/s/$($Site.Name)/stat/device" -WebSession $myWebSession -SkipCertificateCheck
                     })
             }
             else {
                 $Sites += @([PSCustomObject]@{
-                        Server   = $URL
+                        Server   = $Item.Server
                         SiteID   = $Site._id
                         SiteURL  = $Site.name
                         SiteName = $Site.desc
                     })
             }
         }
-        Invoke-RestMethod -Uri "$URL/api/logout" -Method Post -ContentType "application/json; charset=utf-8" -SessionVariable myWebSession -SkipCertificateCheck | Out-Null
+        Invoke-RestMethod -Uri "$($Item.Server)/api/logout" -Method Post -ContentType "application/json; charset=utf-8" -SessionVariable myWebSession -SkipCertificateCheck | Out-Null
     }
     return $Sites
 }
@@ -427,8 +426,7 @@ Function Get-USiteInformation {
 Function Search-USite {
     param (
         [parameter(Mandatory = $true, Position = 0)]
-        [psobject]$UData,
-        [switch]$URL
+        [psobject]$UData
     )
 
     do {
