@@ -5,11 +5,35 @@ Function Add-UServerFile {
     param(
         [parameter(Mandatory = $true, Position = 0)]
         [ValidatePattern("^(?:http(s)?:*)", ErrorMessage = 'Insert correct form of an URL <http|https://<server>:<port>>')]
-        [ValidateScript({[uri]::TryCreate($_, [System.UriKind]::Absolute, [ref]$null)}, ErrorMessage = 'Insert correct form of an URL <http|https://<server>:<port>>')]
+        [ValidateScript( { [uri]::TryCreate($_, [System.UriKind]::Absolute, [ref]$null) }, ErrorMessage = 'Insert correct form of an URL <http|https://<server>:<port>>')]
         [array]$Server
     )
 
     foreach ($Item in $Server) {
+        $ServerUnreachable = $false
+        do {
+            try {
+                $URISplit = $null
+                while ($ServerUnreachable) {
+                    [ValidatePattern("^(?:http(s)?:*)", ErrorMessage = 'Insert correct form of an URL <http|https://<server>:<port>>')]
+                    [ValidateScript( { [uri]::TryCreate($_, [System.UriKind]::Absolute, [ref]$null) }, ErrorMessage = 'Insert correct form of an URL <http|https://<server>:<port>>')]        
+                    $Item = Read-Host -Prompt 'Insert correct form of an URL <http|https://<server>:<port>>'
+                    if ($Item) {
+                        $ServerUnreachable = $false
+                    }
+                }
+                [uri]::TryCreate($Item, [System.UriKind]::Absolute, [ref]$URISplit) | Out-Null
+                $Reachable = Test-NetConnection -ComputerName $URISplit.Host -Port $URISplit.Port -InformationLevel Quiet
+                if (!($Reachable)) {
+                    throw
+                }
+            }
+            catch {
+                Remove-Variable 'Item'
+                $ServerUnreachable = $true
+            }
+        }while (!($Reachable))
+
         do {
             try {
                 $Credential = (Get-Credential -Message "Enter Credential with Superadmin privileges for $Item")
@@ -25,8 +49,6 @@ Function Add-UServerFile {
             }
         }while ($Login.meta.rc -notlike 'ok')
 
-        $URISplit = $null
-        [uri]::TryCreate($Item, [System.UriKind]::Absolute, [ref]$URISplit)
         $Servers += @([PSCustomObject]@{
                 Protocol = $URISplit.Scheme
                 Server   = $URISplit.Host
@@ -85,6 +107,31 @@ Function Open-USite {
         $UData = Import-UData
     }
     $URL = Search-USite -UData $UData
+
+    try {
+        $URISplit = $null
+        [uri]::TryCreate($URL, [System.UriKind]::Absolute, [ref]$URISplit) | Out-Null
+        $Reachable = Test-NetConnection -ComputerName $URISplit.Host -Port $URISplit.Port -InformationLevel Quiet
+        if (!($Reachable)) {
+            throw
+        }
+        $Credential = @{
+            username = ($UData.Server[(($UData.Server.Server).IndexOf($URISplit.Host))].UserName)
+            password = ([Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR(($UData.Server[(($UData.Server.Server).IndexOf($URISplit.Host))].Password))))
+        } | ConvertTo-Json
+        $Login = $null
+        $Login = Invoke-RestMethod -Uri "$($URISplit.Scheme)://$($URISplit.Authority)/api/login" -Method Post -Body $Credential -ContentType "application/json; charset=utf-8" -SessionVariable myWebSession -SkipCertificateCheck
+        if ($Login.meta.rc -notlike 'ok') {
+            throw
+        }
+    }
+    catch {
+        if ($Reachable) {
+            Write-Warning -Message "Login to $($URISplit.Host):$($URISplit.Port) failed"
+        }
+        exit
+    }
+    Invoke-RestMethod -Uri "$($URISplit.Scheme)://$($URISplit.Authority)/api/logout" -Method Post -ContentType "application/json; charset=utf-8" -SessionVariable myWebSession -SkipCertificateCheck | Out-Null
     $DefaultBrowserName = (Get-Item -Path 'HKCU:\SOFTWARE\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice' | Get-ItemProperty).ProgId
 
     if (($DefaultBrowserName -like 'ChromeHTML') -or ($Chrome)) {
@@ -126,8 +173,8 @@ Function Open-USite {
     $ElementPassword = Get-SeElement -Driver $Driver -Name 'password' -Wait -Timeout 10
     $ElementLogin = Get-SeElement -Driver $Driver -Id 'loginButton' -Wait -Timeout 10
         
-    Send-SeKeys -Element $ElementUsername -Keys (($UData.Server.Credential | ConvertFrom-Json).username)
-    Send-SeKeys -Element $ElementPassword -Keys (($UData.Server.Credential | ConvertFrom-Json).password)
+    Send-SeKeys -Element $ElementUsername -Keys (($Credential | ConvertFrom-Json).username)
+    Send-SeKeys -Element $ElementPassword -Keys (($Credential | ConvertFrom-Json).password)
         
     Invoke-SeClick -Driver $Driver -Element $ElementLogin -JavaScriptClick
         
@@ -325,43 +372,50 @@ Function Get-USiteInformation {
 
     Write-Host 'Parsing all Sites - Please Wait'
     foreach ($Item in $Server) {
-        if (Test-NetConnection -ComputerName $Item.Server -Port $Item.Port -InformationLevel Quiet) {
+        try {
             $URL = "$($Item.Protocol)://$($Item.Server):$($Item.Port)"
+            $Reachable = Test-NetConnection -ComputerName $Item.Server -Port $Item.Port -InformationLevel Quiet
+            if (!($Reachable)) {
+                throw
+            }
             $Credential = @{
                 username = $Item.UserName
                 password = ([Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($Item.Password)))
             } | ConvertTo-Json
-            try {
-                $Login = $null
-                $Login = Invoke-RestMethod -Uri "$URL/api/login" -Method Post -Body $Credential -ContentType "application/json; charset=utf-8" -SessionVariable myWebSession -SkipCertificateCheck
-            }
-            catch {
-                Write-Warning -Message "Login to $URL failed du to wrong credentials" 
-            }
-            if ($Login.meta.rc -eq 'ok') {
-                foreach ($Site in (Invoke-RestMethod -Uri "$URL/api/stat/sites" -WebSession $myWebSession -SkipCertificateCheck).data) {
-                    if ($Full) {
-                        $Sites += @([PSCustomObject]@{
-                                Server   = $URL
-                                SiteID   = $Site._id
-                                SiteURL  = $Site.name
-                                SiteName = $Site.desc
-                                Health   = $Site.health
-                                Devices  = Invoke-RestMethod -Uri "$URL/api/s/$($Site.Name)/stat/device" -WebSession $myWebSession -SkipCertificateCheck
-                            })
-                    }
-                    else {
-                        $Sites += @([PSCustomObject]@{
-                                Server   = $URL
-                                SiteID   = $Site._id
-                                SiteURL  = $Site.name
-                                SiteName = $Site.desc
-                            })
-                    }
-                }
-                Invoke-RestMethod -Uri "$URL/api/logout" -Method Post -ContentType "application/json; charset=utf-8" -SessionVariable myWebSession -SkipCertificateCheck | Out-Null
+            $Login = $null
+            $Login = Invoke-RestMethod -Uri "$URL/api/login" -Method Post -Body $Credential -ContentType "application/json; charset=utf-8" -SessionVariable myWebSession -SkipCertificateCheck
+            if ($Login.meta.rc -notlike 'ok') {
+                throw
             }
         }
+        catch {
+            if ($Reachable) {
+                Write-Warning -Message "Login to $($Item.Server):$($Item.Port) failed"
+            }
+            exit
+        }
+
+        foreach ($Site in (Invoke-RestMethod -Uri "$URL/api/stat/sites" -WebSession $myWebSession -SkipCertificateCheck).data) {
+            if ($Full) {
+                $Sites += @([PSCustomObject]@{
+                        Server   = $URL
+                        SiteID   = $Site._id
+                        SiteURL  = $Site.name
+                        SiteName = $Site.desc
+                        Health   = $Site.health
+                        Devices  = Invoke-RestMethod -Uri "$URL/api/s/$($Site.Name)/stat/device" -WebSession $myWebSession -SkipCertificateCheck
+                    })
+            }
+            else {
+                $Sites += @([PSCustomObject]@{
+                        Server   = $URL
+                        SiteID   = $Site._id
+                        SiteURL  = $Site.name
+                        SiteName = $Site.desc
+                    })
+            }
+        }
+        Invoke-RestMethod -Uri "$URL/api/logout" -Method Post -ContentType "application/json; charset=utf-8" -SessionVariable myWebSession -SkipCertificateCheck | Out-Null
     }
     return $Sites
 }
@@ -396,4 +450,5 @@ Function Search-USite {
     Invoke-Expression $Switch
 }
 
-Open-USite
+#Add-USiteFile
+#Open-USite -Chrome

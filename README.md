@@ -7,18 +7,13 @@
 # Usage
 Note: It will create a directory under '%localappdata%\Unifi\' and read/write configurations from there
 
-## Adding a Credential File
-```powershell
-#export credentials as secure xml
-Add-UCredentialFile
-Add-UCredentialFile -Credential (Get-Credential)
-```
-
 ## Adding a Server source file
 ```powershell
 #export server as xml
+#will tests connectivity to the server on <port> and try to login
+#for each server it will ask for it credential
 #each server will be added with the attribute <Exclude = $False>
-Add-UServerFile -Server 'server01:8443', 'server02:8443', 'server03:8443'
+Add-UServerFile -Server 'https://server01:8443', 'https://server02:8443', 'https://server03:8443'
 ```
 
 ## Change the Server source file
