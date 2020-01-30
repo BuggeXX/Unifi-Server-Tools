@@ -260,13 +260,15 @@ Function Get-UServerStats {
     }
 
     if ($Device) {
-        $DeviceStats = [PSCustomObject]@{
-            PendingUpdates = ($UData.Sites.Devices.data | Where-Object -Property upgradable -eq $true).Count
-            Unsupported    = ($UData.Sites.Devices.data | Where-Object -Property unsupported -eq $true).Count
-            Incompatible   = ($UData.Sites.Devices.data | Where-Object -Property model_incompatible -eq $true).Count
-            Mesh           = ($UData.Sites.Devices.data | Where-Object -Property mesh_sta_vap_enabled -eq $true).Count
-            Locating       = ($UData.Sites.Devices.data | Where-Object -Property locating -eq $true).Count
-            Overheating    = ($UData.Sites.Devices.data | Where-Object -Property overheating -eq $true).Count
+        foreach ($Server in ($UData.Server | Where-Object -Property Exclude -eq $false).Server) {
+            $DeviceStats = [PSCustomObject]@{
+                PendingUpdates = ((($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property upgradable -eq $true).count) + $DeviceStats.PendingUpdates
+                Unsupported    = ((($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property unsupported -eq $true).count) + $DeviceStats.Unsupported
+                Incompatible   = ((($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property model_incompatible -eq $true).count) + $DeviceStats.Incompatible
+                Mesh           = ((($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property mesh_sta_vap_enabled -eq $true).count) + $DeviceStats.Mesh
+                Locating       = ((($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property locating -eq $true).count) + $DeviceStats.Locating
+                Overheating    = ((($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property overheating -eq $true).count) + $DeviceStats.Overheating
+            }
         }
     }
     
@@ -285,12 +287,14 @@ Function Get-UServerStats {
     }
 
     else {
-        $ServerStats = [PSCustomObject]@{
-            Sites               = $UData.Sites.Count
-            DevicesAdopted      = ($UData.Sites.health.num_adopted | Measure-Object -sum).sum
-            DevicesOnline       = (($UData.Sites.health.num_ap | Measure-Object -sum).sum) + (($UData.Sites.health.num_sw | Measure-Object -sum).sum)
-            DevicesDisconnected = ($UData.Sites.health.num_disconnected | Measure-Object -sum).sum
-            Clients             = ($UData.Sites.health.num_user | Measure-Object -sum).sum  
+        foreach ($Server in ($UData.Server | Where-Object -Property Exclude -eq $false).Server) {
+            $ServerStats = [PSCustomObject]@{
+                Sites               = (($UData.Sites | Where-Object -Property Server -Match $Server).Count) + $ServerStats.Sites
+                DevicesAdopted      = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_adopted).count) + $ServerStats.DevicesAdopted
+                DevicesOnline       = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_ap).count) + ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_sw).count) + $ServerStats.DevicesOnline
+                DevicesDisconnected = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_disconnected).count) + $ServerStats.DevicesDisconnected
+                Clients             = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_user).count) + $ServerStats.Clients 
+            }
         }
     }
 
