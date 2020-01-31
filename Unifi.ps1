@@ -290,7 +290,7 @@ Function Get-UServerStats {
         foreach ($Server in ($UData.Server | Where-Object -Property Exclude -eq $false).Server) {
             $ServerStats = [PSCustomObject]@{
                 Sites               = (($UData.Sites | Where-Object -Property Server -Match $Server).Count) + $ServerStats.Sites
-                DevicesAdopted      = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_adopted| Measure-Object -sum).sum) + $ServerStats.DevicesAdopted
+                DevicesAdopted      = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_adopted | Measure-Object -sum).sum) + $ServerStats.DevicesAdopted
                 DevicesOnline       = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_ap | Measure-Object -sum).sum) + ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_sw | Measure-Object -sum).sum) + $ServerStats.DevicesOnline
                 DevicesDisconnected = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_disconnected | Measure-Object -sum).sum) + $ServerStats.DevicesDisconnected
                 Clients             = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_user | Measure-Object -sum).sum) + $ServerStats.Clients 
@@ -309,6 +309,46 @@ Function Get-UServerStats {
     else {
         $ServerStats
     }
+}
+
+Function Remove-USiteAlerts {
+    param(
+        [switch]$Live
+    ) 
+
+    if ($Live) {
+        $UData = Import-UData -Live
+    }
+    else {
+        $UData = Import-UData 
+    }
+
+    foreach ($Server in ($UData.Server | Where-Object -Property Exclude -eq $false).Server) {
+    }
+}
+
+Function Invoke-UAutoMigrate {
+    param(
+        [switch]$Live
+    ) 
+
+    if ($Live) {
+        $UData = Import-UData -Full -Live
+    }
+    else {
+        $UData = Import-UData -Full
+    }
+
+    foreach ($Server in ($UData.Server | Where-Object -Property Exclude -eq $true).Server) {
+        foreach ($Site in $UData.Sites | Where-Object -Property Server -Match $Server) {
+            if ($Site.Health.status -notlike 'error') {
+                $SiteMigrateable += @([PSCustomObject]@{
+                        Site = $Site
+                    })
+            }        
+        }
+    }
+    $SiteMigrateable
 }
 
 #Helper Functions
@@ -406,6 +446,7 @@ Function Get-USiteInformation {
                         SiteURL  = $Site.name
                         SiteName = $Site.desc
                         Health   = $Site.health
+                        Alarms   = $Site.num_new_alarms
                         Devices  = Invoke-RestMethod -Uri "$($Item.Server)/api/s/$($Site.Name)/stat/device" -WebSession $myWebSession -SkipCertificateCheck
                     })
             }
@@ -415,6 +456,7 @@ Function Get-USiteInformation {
                         SiteID   = $Site._id
                         SiteURL  = $Site.name
                         SiteName = $Site.desc
+                        Alarms   = $Site.num_new_alarms
                     })
             }
         }
@@ -451,3 +493,5 @@ Function Search-USite {
     $Switch += "`n}"
     Invoke-Expression $Switch
 }
+
+Invoke-UAutoMigrate
