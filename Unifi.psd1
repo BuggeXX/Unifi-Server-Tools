@@ -8,7 +8,7 @@
 # Modified Elmar Niederkofler 29.01.2020
 
 @{
-    ModuleVersion        = '2.1.5'
+    ModuleVersion        = '2.5.8.4'
     GUID                 = '6d390ab4-57aa-49ea-8bf0-93d1281297ec'
     Author               = 'Elmar Niederkofler'
     CompanyName          = 'Telmekom'
@@ -22,7 +22,9 @@
         'Open-USite',
         'Get-USiteURL',
         'Add-UProfile',
-        'Get-UServerStats'
+        'Get-UServerStats',
+        'Invoke-UAutoMigrate',
+        'Invoke-UAutoUpgrade'
     )
 
     CmdletsToExport      = @()
