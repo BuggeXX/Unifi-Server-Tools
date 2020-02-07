@@ -440,7 +440,7 @@ Function Invoke-UAutoMigrate {
                         Send-SeKeys -Element (Get-SeElement -Driver $DriverNew -Name 'name') -Keys ($Site.SiteName)
                    
                         $SiteToImport = (Get-ChildItem -Path "$env:LOCALAPPDATA\Unifi\Export" | Sort-Object LastAccessTime -Descending | Select-Object -First 1)
-                        $SiteRenamed = Rename-Item -Path $SiteToImport.FullName -NewName (($Site.SiteName).Replace('/', ' ').Replace('?', ' ') + '.unf') -Force -PassThru
+                        $SiteRenamed = Rename-Item -Path $SiteToImport.FullName -NewName (($Site.SiteName).Replace('/', ' ').Replace('?', ' ').Replace('"', ' ') + '.unf') -Force -PassThru
                         $URLBeforImport = $DriverNew.Url
                         Send-SeKeys -Element (Get-SeElement -Driver $DriverNew -XPath '/html/body/label/input') -Keys $SiteRenamed.FullName
                         while ($DriverNew.Url -like $URLBeforImport) { Start-Sleep 2 }
