@@ -89,13 +89,22 @@ Function Add-USiteFile {
     )
 
     $UData = Import-UData -WithoutSite
+    if ($UData -like 'Error') {
+        return
+    }
 
     if ($Full) {
         $Sites = Get-USiteInformation -Server $UData.Server -Full
+        if ($Sites -like 'Error') {
+            return
+        }
         $Sites | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\SitesFull.xml') -Force | Out-Null
     }
     else {
         $Sites = Get-USiteInformation -Server $UData.Server
+        if ($Sites -like 'Error') {
+            return
+        }
         $Sites | Export-CliXml -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Sites.xml') -Force | Out-Null
     }
 }
@@ -113,7 +122,11 @@ Function Open-USite {
     else {
         $UData = Import-UData
     }
+    if ($UData -like 'Error') {
+        return
+    }
     $URL = Search-USite -UData $UData
+    
 
     try {
         $URISplit = $null
@@ -133,67 +146,73 @@ Function Open-USite {
         }
     }
     catch {
-        if ($Reachable) {
-            Write-Warning -Message "Login to $($URISplit.Host):$($URISplit.Port) failed"
-        }
-        exit
+        Write-Warning -Message "Login to $($URISplit.Host):$($URISplit.Port) failed"
+        return
     }
     Invoke-RestMethod -Uri "$($URISplit.Scheme)://$($URISplit.Authority)/api/logout" -Method Post -ContentType "application/json; charset=utf-8" -SessionVariable myWebSession -SkipCertificateCheck | Out-Null
     $DefaultBrowserName = (Get-Item -Path 'HKCU:\SOFTWARE\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice' | Get-ItemProperty).ProgId
     $FirstLogin = $false
-
-    if (!($global:Driver)) {
-        if (($DefaultBrowserName -like 'ChromeHTML') -or ($Chrome)) {
-            if (Test-Path -Path "$env:LOCALAPPDATA\Unifi\Chrome\Unifi") {
-                $global:Driver = Start-SeChrome -Maximized -Quiet -ProfileDirectoryPath "$env:LOCALAPPDATA\Unifi\Chrome\Unifi"
+    try {
+        if (!($global:Driver)) {
+            if (($DefaultBrowserName -like 'ChromeHTML') -or ($Chrome)) {
+                if (Test-Path -Path "$env:LOCALAPPDATA\Unifi\Chrome\Unifi") {
+                    $global:Driver = Start-SeChrome -Maximized -Quiet -ProfileDirectoryPath "$env:LOCALAPPDATA\Unifi\Chrome\Unifi"
+                }
+                else {
+                    $global:Driver = Start-SeChrome -Maximized -Quiet
+                }
             }
+
+            elseif (($DefaultBrowserName -like 'FirefoxURL-308046B0AF4A39CB') -or ($Firefox)) {
+                if (Test-Path -Path "$env:LOCALAPPDATA\Unifi\Firefox\Unifi") {
+                    $global:Driver = Start-SeFirefox -Maximized -Quiet -Arguments '-profile', "$env:LOCALAPPDATA\Unifi\Firefox\Unifi"
+                }
+                else {
+                    $global:Driver = Start-SeFirefox -Maximized -Quiet
+                }
+            }
+
+            elseif ($DefaultBrowserName -like 'MSEdgeHTM') {
+                if (Test-Path -Path "$env:LOCALAPPDATA\Unifi\Chrome\Unifi") {
+                    $global:Driver = Start-SeNewEdge -Maximized -Quiet -ProfileDirectoryPath "$env:LOCALAPPDATA\Unifi\Chrome\Unifi"
+                }
+                else {
+                    $global:Driver = Start-SeNewEdge -Maximized -Quiet
+                }
+            }
+
             else {
-                $global:Driver = Start-SeChrome -Maximized -Quiet
+                $global:Driver = Start-SeEdge -Maximized -Quiet
             }
+            $FirstLogin = $true
         }
-
-        elseif (($DefaultBrowserName -like 'FirefoxURL-308046B0AF4A39CB') -or ($Firefox)) {
-            if (Test-Path -Path "$env:LOCALAPPDATA\Unifi\Firefox\Unifi") {
-                $global:Driver = Start-SeFirefox -Maximized -Quiet -Arguments '-profile', "$env:LOCALAPPDATA\Unifi\Firefox\Unifi"
-            }
-            else {
-                $global:Driver = Start-SeFirefox -Maximized -Quiet
-            }
-        }
-
-        elseif ($DefaultBrowserName -like 'MSEdgeHTM') {
-            if (Test-Path -Path "$env:LOCALAPPDATA\Unifi\Chrome\Unifi") {
-                $global:Driver = Start-SeNewEdge -Maximized -Quiet -ProfileDirectoryPath "$env:LOCALAPPDATA\Unifi\Chrome\Unifi"
-            }
-            else {
-                $global:Driver = Start-SeNewEdge -Maximized -Quiet
-            }
-        }
-
-        else {
-            $global:Driver = Start-SeEdge -Maximized -Quiet
-        }
-        $FirstLogin = $true
-    }
     
-    if (($global:Driver.Url -notmatch $URISplit.Authority) -or ($FirstLogin)) {
-        $Counter = 0
-        Open-SeUrl -Url $URL -Driver $global:Driver
-        while (($global:Driver.Url -notmatch 'login') -and ($Counter -lt 10)) { 
-            Start-sleep -Seconds 0.1
-            $Counter += 1
-        }
-        if ($Counter -lt 10) {
-                    
-            Send-SeKeys -Element (Get-SeElement -Driver $global:Driver -Name 'username') -Keys (($Credential | ConvertFrom-Json).username)
-            Send-SeKeys -Element (Get-SeElement -Driver $global:Driver -Name 'password') -Keys (($Credential | ConvertFrom-Json).password)    
-            Invoke-SeClick -Driver $global:Driver -Element (Get-SeElement -Driver $global:Driver -Id 'loginButton') -JavaScriptClick
+        if (($global:Driver.Url -notmatch $URISplit.Authority) -or ($FirstLogin)) {
+            $Counter = 0
+            Open-SeUrl -Url $URL -Driver $global:Driver
+            Start-Sleep -Seconds 0.3
+            while (($global:Driver.Url -notmatch 'login') -and ($Counter -lt 10)) { 
+                Start-sleep -Seconds 0.1
+                $Counter += 1
+            }
+            if ($Counter -lt 10) {
+
+                Send-SeKeys -Element (Get-SeElement -Driver $global:Driver -Name 'username') -Keys (($Credential | ConvertFrom-Json).username)
+                Send-SeKeys -Element (Get-SeElement -Driver $global:Driver -Name 'password') -Keys (($Credential | ConvertFrom-Json).password)    
+                Invoke-SeClick -Driver $global:Driver -Element (Get-SeElement -Driver $global:Driver -Id 'loginButton') -JavaScriptClick
         
-            while ($global:Driver.Url -match 'login') { }
+                while ($global:Driver.Url -match 'login') { }
+            }
+        }
+        if ($global:Driver.Url -notlike $URL) {
+            Open-SeUrl -Url $URL -Driver $global:Driver
         }
     }
-    if ($global:Driver.Url -notlike $URL) {
-        Open-SeUrl -Url $URL -Driver $global:Driver
+    catch {
+        return
+    }
+    finally {
+        Remove-Variable -Name 'UData'
     }
 }
 
@@ -254,9 +273,19 @@ Function Get-USiteURL {
     else {
         $UData = Import-UData
     }
-
-    $URL = Search-USite -UData $UData
-    Write-Host -Object $URL
+    if ($UData -like 'Error') {
+        return
+    }
+    try {
+        $URL = Search-USite -UData $UData
+        Write-Host -Object $URL
+    }
+    catch {
+        return
+    }
+    finally {
+        Remove-Variable -Name 'UData'
+    }
 }
 
 Function Get-UServerStats {
@@ -272,62 +301,74 @@ Function Get-UServerStats {
     else {
         $UData = Import-UData -Full 
     }
+    if ($UData -like 'Error') {
+        return
+    }
 
-    if ($Device) {
-        foreach ($Server in ($UData.Server | Where-Object -Property Exclude -eq $false).Server) {
-            $DeviceStats = [PSCustomObject]@{
-                PendingUpdates = ((($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property upgradable -eq $true).count) + $DeviceStats.PendingUpdates
-                Unsupported    = ((($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property unsupported -eq $true).count) + $DeviceStats.Unsupported
-                Incompatible   = ((($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property model_incompatible -eq $true).count) + $DeviceStats.Incompatible
-                Mesh           = ((($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property mesh_sta_vap_enabled -eq $true).count) + $DeviceStats.Mesh
-                Locating       = ((($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property locating -eq $true).count) + $DeviceStats.Locating
-                Overheating    = ((($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property overheating -eq $true).count) + $DeviceStats.Overheating
+    try {
+        if ($Device) {
+            foreach ($Server in ($UData.Server | Where-Object -Property Exclude -eq $false).Server) {
+                $DeviceStats = [PSCustomObject]@{
+                    PendingUpdates = ((($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property upgradable -eq $true).count) + $DeviceStats.PendingUpdates
+                    Unsupported    = ((($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property unsupported -eq $true).count) + $DeviceStats.Unsupported
+                    Incompatible   = ((($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property model_incompatible -eq $true).count) + $DeviceStats.Incompatible
+                    Mesh           = ((($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property mesh_sta_vap_enabled -eq $true).count) + $DeviceStats.Mesh
+                    Locating       = ((($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property locating -eq $true).count) + $DeviceStats.Locating
+                    Overheating    = ((($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data | Where-Object -Property overheating -eq $true).count) + $DeviceStats.Overheating
+                }
             }
         }
-    }
     
-    elseif ($Distribution) {
-        foreach ($Server in ($UData.Server | Where-Object -Property Exclude -eq $false).Server) {
-            $DistributionStats += @([PSCustomObject]@{ 
-                    Server              = $Server
-                    Sites               = ($UData.Sites | Where-Object -Property Server -Match $Server).Count
-                    PendingUpdates      = (($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data.upgradable | Measure-Object -sum).sum
-                    DevicesAdopted      = (($UData.Sites | Where-Object -Property Server -Match $Server).health.num_adopted | Measure-Object -sum).sum
-                    DevicesOnline       = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_ap | Measure-Object -sum).sum) + ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_sw | Measure-Object -sum).sum)
-                    DevicesDisconnected = (($UData.Sites | Where-Object -Property Server -Match $Server).health.num_disconnected | Measure-Object -sum).sum
-                    Clients             = (($UData.Sites | Where-Object -Property Server -Match $Server).health.num_user | Measure-Object -sum).sum
-                })
-        }
-    }
-
-    else {
-        foreach ($Server in ($UData.Server | Where-Object -Property Exclude -eq $false).Server) {
-            $ServerStats = [PSCustomObject]@{
-                Sites               = (($UData.Sites | Where-Object -Property Server -Match $Server).Count) + $ServerStats.Sites
-                DevicesAdopted      = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_adopted | Measure-Object -sum).sum) + $ServerStats.DevicesAdopted
-                DevicesOnline       = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_ap | Measure-Object -sum).sum) + ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_sw | Measure-Object -sum).sum) + $ServerStats.DevicesOnline
-                DevicesDisconnected = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_disconnected | Measure-Object -sum).sum) + $ServerStats.DevicesDisconnected
-                Clients             = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_user | Measure-Object -sum).sum) + $ServerStats.Clients 
+        elseif ($Distribution) {
+            foreach ($Server in ($UData.Server | Where-Object -Property Exclude -eq $false).Server) {
+                $DistributionStats += @([PSCustomObject]@{ 
+                        Server              = $Server
+                        Sites               = ($UData.Sites | Where-Object -Property Server -Match $Server).Count
+                        PendingUpdates      = (($UData.Sites | Where-Object -Property Server -Match $Server).Devices.data.upgradable | Measure-Object -sum).sum
+                        DevicesAdopted      = (($UData.Sites | Where-Object -Property Server -Match $Server).health.num_adopted | Measure-Object -sum).sum
+                        DevicesOnline       = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_ap | Measure-Object -sum).sum) + ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_sw | Measure-Object -sum).sum)
+                        DevicesDisconnected = (($UData.Sites | Where-Object -Property Server -Match $Server).health.num_disconnected | Measure-Object -sum).sum
+                        Clients             = (($UData.Sites | Where-Object -Property Server -Match $Server).health.num_user | Measure-Object -sum).sum
+                    })
             }
         }
-    }
 
-    if ($Device) { 
-        $DeviceStats
-    }
-    elseif ($Distribution) {
-        foreach ($DistributionStat in $DistributionStats) {
-            $DistributionStat
+        else {
+            foreach ($Server in ($UData.Server | Where-Object -Property Exclude -eq $false).Server) {
+                $ServerStats = [PSCustomObject]@{
+                    Sites               = (($UData.Sites | Where-Object -Property Server -Match $Server).Count) + $ServerStats.Sites
+                    DevicesAdopted      = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_adopted | Measure-Object -sum).sum) + $ServerStats.DevicesAdopted
+                    DevicesOnline       = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_ap | Measure-Object -sum).sum) + ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_sw | Measure-Object -sum).sum) + $ServerStats.DevicesOnline
+                    DevicesDisconnected = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_disconnected | Measure-Object -sum).sum) + $ServerStats.DevicesDisconnected
+                    Clients             = ((($UData.Sites | Where-Object -Property Server -Match $Server).health.num_user | Measure-Object -sum).sum) + $ServerStats.Clients 
+                }
+            }
+        }
+
+        if ($Device) { 
+            $DeviceStats
+        }
+        elseif ($Distribution) {
+            foreach ($DistributionStat in $DistributionStats) {
+                $DistributionStat
+            }
+        }
+        else {
+            $ServerStats
         }
     }
-    else {
-        $ServerStats
+    catch {
+        return
+    }
+    finally {
+        Remove-Variable -Name 'UData'
     }
 }
 
 Function Remove-USiteAlerts {
     param(
-        [switch]$Live
+        [switch]$Live,
+        [switch]$Show
     ) 
 
     if ($Live) {
@@ -336,17 +377,63 @@ Function Remove-USiteAlerts {
     else {
         $UData = Import-UData 
     }
+    if ($UData -like 'Error') {
+        return
+    }
 
-    foreach ($Server in ($UData.Server | Where-Object -Property Exclude -eq $false).Server) {
+    foreach ($Site in $UData.Sites | Where-Object -Property Alarms -gt 0) {
+        try {
+            $URISplit = $null
+            [uri]::TryCreate($Site.Server, [System.UriKind]::Absolute, [ref]$URISplit) | Out-Null
+            $URL = "$($Site.Server)/manage/site/$($Site.SiteURL)/dashboard"
+
+            if (!($Driver)) {
+                if ($Show) {
+                    $Driver = Start-SeChrome -Quiet
+                }
+                else {
+                    $Driver = Start-SeChrome -Headless -Quiet
+                }
+            }
+
+            Open-SeUrl -Driver $Driver -Url $URL
+            while ($Driver.Url -notmatch 'unifi.telmekom.net:8443') { }
+
+            if ($Driver.URL -match 'login') {
+                $Credential = @{
+                    username = ($UData.Server[(($UData.Server.Host).IndexOf($URISplit.Host))].UserName)
+                    password = ([Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR(($UData.Server[(($UData.Server.Host).IndexOf($URISplit.Host))].Password))))
+                } | ConvertTo-Json
+
+                Send-SeKeys -Element (Get-SeElement -Driver $Driver -Name 'username') -Keys (($Credential | ConvertFrom-Json).username)
+                Send-SeKeys -Element (Get-SeElement -Driver $Driver -Name 'password') -Keys (($Credential | ConvertFrom-Json).password)
+                Invoke-SeClick -Driver $Driver -Element (Get-SeElement -Driver $Driver -Id 'loginButton') -JavaScriptClick
+                while ($Driver.Url -match 'login') { }
+                if ($Driver.Url -notlike $URL) {
+                    Open-SeUrl -Driver $Driver -Url $URL
+                    while ($Driver.Url -notlike $URL) { }
+                }
+            }
+            Invoke-SeClick -Driver $Driver -Element (Get-SeElement -Driver $Driver -XPath '//*[@id="alertsLink"]')
+            Invoke-SeClick -Driver $Driver -Element (Get-SeElement -Driver $Driver -TagName 'BUTTON' | Where-Object -Property Text -Like 'ARCHIVE ALL')
+        }   
+        catch {
+            return
+        }     
     }
 }
 
 Function Invoke-UAutoMigrate {
-    param(
-        [switch]$Debug
-    ) 
+    param (
+        [parameter(Mandatory = $false, Position = 0)]
+        [array]$Exclude,
+        [switch]$Show
+    )
 
     $UData = Import-UData -Full -Live
+    if ($UData -like 'Error') {
+        return
+    }
 
     foreach ($Server in ($UData.Server | Where-Object -Property MigrateAble -eq $true).Server) {
         $Distribution += @([PSCustomObject]@{
@@ -358,7 +445,7 @@ Function Invoke-UAutoMigrate {
             })
     }
 
-    if ($Debug) {
+    if ($Show) {
         $DriverOld = Start-SeChrome -Quiet -DefaultDownloadPath "$env:LOCALAPPDATA\Unifi\Export"
     }
     else {
@@ -369,7 +456,7 @@ Function Invoke-UAutoMigrate {
         foreach ($Server in ($UData.Server | Where-Object -Property Migrate -eq $true).Server) {
             $LogedIN = $false
             foreach ($Site in $UData.Sites | Where-Object -Property Server -Match $Server) {
-                if (('error' -notin $Site.Health.status) -and ((($Site.Health.num_disconnected | Measure-Object -sum).sum -like 0) -and (($Site.Health.num_adopted | Measure-Object -sum).sum -gt 0)) -and ($Site.Devices.data.unsupported -notcontains 'true')) {
+                if (('error' -notin $Site.Health.status) -and ((($Site.Health.num_disconnected | Measure-Object -sum).sum -like 0) -and (($Site.Health.num_adopted | Measure-Object -sum).sum -gt 0)) -and ($Site.Devices.data.unsupported -notcontains 'true') -and ($Site.SiteName -notlike $Exclude)) {
                     Write-Warning -Message "Starting migration of $($Site.SiteName)"
 
                     $URISplit = $null
@@ -417,7 +504,7 @@ Function Invoke-UAutoMigrate {
                         Invoke-SeClick -Driver $DriverOld -Element ((Get-SeElement -Driver $DriverOld -TagName 'BUTTON') | Where-Object -Property Text -like 'Confirm') -JavaScriptClick
 
                         ###############################
-                        if ($Debug) {
+                        if ($Show) {
                             $DriverNew = Start-SeChrome -StartURL $MigrationHost[0].Server -Quiet -DefaultDownloadPath "$env:LOCALAPPDATA\Unifi\Export"
                         }
                         else {
@@ -440,7 +527,7 @@ Function Invoke-UAutoMigrate {
                         Send-SeKeys -Element (Get-SeElement -Driver $DriverNew -Name 'name') -Keys ($Site.SiteName)
                    
                         $SiteToImport = (Get-ChildItem -Path "$env:LOCALAPPDATA\Unifi\Export" | Sort-Object LastAccessTime -Descending | Select-Object -First 1)
-                        $SiteRenamed = Rename-Item -Path $SiteToImport.FullName -NewName (($Site.SiteName).Replace('/', ' ').Replace('?', ' ').Replace('"', ' ') + '.unf') -Force -PassThru
+                        $SiteRenamed = Rename-Item -Path $SiteToImport.FullName -NewName (($Site.SiteName).Replace('/', ' ').Replace('?', ' ') + '.unf') -Force -PassThru
                         $URLBeforImport = $DriverNew.Url
                         Send-SeKeys -Element (Get-SeElement -Driver $DriverNew -XPath '/html/body/label/input') -Keys $SiteRenamed.FullName
                         while ($DriverNew.Url -like $URLBeforImport) { Start-Sleep 2 }
@@ -509,9 +596,13 @@ Function Invoke-UAutoMigrate {
     }
     catch {
         Write-Error -Message ($_.Exception.Message)
-        $DriverOld.Close()
-        $DriverNew.Close()
-        Read-Host -Prompt 'Press enter to exit'
+        if ($DriverOld) {
+            $DriverOld.Close()
+        }
+        if ($DriverNew) {
+            $DriverNew.Close()
+        }
+        return
     }
     finally {
         if ($DriverOld) {
@@ -534,6 +625,9 @@ Function Invoke-UAutoUpgrade {
     }
     else {
         $UData = Import-UData -Full
+    }
+    if ($UData -like 'Error') {
+        return
     }
     
     foreach ($Site in $UData.Sites) {
@@ -567,7 +661,7 @@ Function Invoke-UAutoUpgrade {
                     $DeviceStatus = (Invoke-RestMethod -Uri "$($Site.Server)/api/s/$($Site.SiteURL)/stat/device" -WebSession $myWebSession -SkipCertificateCheck).data | Where-Object -Property mac -like $Device.mac
 
                     $TimeOut += 1
-                    if ($TimeOut -gt 20) {
+                    if ($TimeOut -gt 15) {
                         Write-Warning -Message "Upgrade for $($Device.name) on site $($Site.SiteName) failed"    
                         Read-Host -Prompt 'Press enter to exit'
                         exit
@@ -578,6 +672,32 @@ Function Invoke-UAutoUpgrade {
             }
         }
     }
+}
+
+Function Export-USiteXLSX {
+    param(
+        [switch]$Live
+    ) 
+
+    if ($Live) {
+        $UData = Import-UData -Live
+    }
+    else {
+        $UData = Import-UData 
+    }
+    if ($UData -like 'Error') {
+        return
+    }
+
+    foreach ($Site in $UData.Sites) {
+        $ObjectListXML += @([PSCustomObject]@{
+                Host   = $Site.Server
+                Client = $Site.SiteName
+                URL    = "$($Site.Server)/$($Site.SiteURL)/dashboard"
+            })
+    }
+
+    Export-XLSX -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Site.xlsx') -InputObject $ObjectListXML -Force
 }
 
 #Helper Functions
@@ -602,7 +722,7 @@ Function Import-UData {
         catch {
             Write-Warning "$env:LOCALAPPDATA\Unifi\Server.xml not found"
             Write-Warning "Run Add-UServerFile first"
-            exit
+            return
         }
     }
 
@@ -610,9 +730,15 @@ Function Import-UData {
         #retriving site data
         if (($Live) -and ($Full)) {
             $Sites = Get-USiteInformation -Server $Servers -Full
+            if ($Sites -like 'Error') {
+                return 'Error'
+            }
         }
         elseif ($Live) {
             $Sites = Get-USiteInformation -Server $Servers
+            if ($Sites -like 'Error') {
+                return 'Error'
+            }
         }
         else {
             try {
@@ -626,7 +752,7 @@ Function Import-UData {
             catch {
                 Write-Warning "$env:LOCALAPPDATA\Unifi\Sites.xml or $env:LOCALAPPDATA\Unifi\SitesFull.xml not found"
                 Write-Warning "Run Add-USiteFile -Full first"
-                exit
+                return 'Error'
             }
         }
     }
@@ -661,10 +787,8 @@ Function Get-USiteInformation {
             }
         }
         catch {
-            if ($Reachable) {
-                Write-Warning -Message "Login to $($Item.Server) failed"
-            }
-            exit
+            Write-Warning -Message "Login to $($Item.Server) failed"
+            return 'Error'
         }
         foreach ($Site in (Invoke-RestMethod -Uri "$($Item.Server)/api/stat/sites" -WebSession $myWebSession -SkipCertificateCheck).data) {
             if ($Full) {
