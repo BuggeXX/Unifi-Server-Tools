@@ -5,10 +5,10 @@
 #
 # Generated on: 24.01.2020
 #
-# Modified Elmar Niederkofler 29.01.2020
+# Modified Elmar Niederkofler 13.02.2020
 
 @{
-    ModuleVersion        = '2.1.5'
+    ModuleVersion        = '2.6.0.2'
     GUID                 = '6d390ab4-57aa-49ea-8bf0-93d1281297ec'
     Author               = 'Elmar Niederkofler'
     CompanyName          = 'Telmekom'
@@ -22,7 +22,11 @@
         'Open-USite',
         'Get-USiteURL',
         'Add-UProfile',
-        'Get-UServerStats'
+        'Get-UServerStats',
+        'Invoke-UAutoMigrate',
+        'Invoke-UAutoUpgrade',
+        'Remove-USiteAlerts',
+        'Export-USiteXLSX'
     )
 
     CmdletsToExport      = @()
