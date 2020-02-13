@@ -2,7 +2,7 @@
 - Work in progress, not all features are available yet
 - Reading all kind of informations from Unifi Controllers
 - Invoking different task such as updating devices over all sites
-- Automated browsing to a site will require https://github.com/adamdriscoll/selenium-powershell to be installed
+- Some functions will require https://github.com/adamdriscoll/selenium-powershell to be installed
 
 # Usage
 Note: It will create a directory under '%localappdata%\Unifi\' and read/write configurations from there
