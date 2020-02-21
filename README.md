@@ -11,8 +11,11 @@ Note: It will create a directory under '%localappdata%\Unifi\' and read/write co
 ```powershell
 #export server as xml
 #will tests connectivity to the server on <port> and try to login
-#for each server it will ask for it credential
+#for each server it will ask for it credential, which are stored as secure strings in the xml
+#inform Url and Port will be automatically detected
 #each server will be added with the attribute <Exclude = $False>
+#each server will be added with the attribute <Migrate = $False>
+#each server will be added with the attribute <MigrateAble = $False>
 Add-UServerFile -Server 'https://server01:8443', 'https://server02:8443', 'https://server03:8443'
 ```
 
@@ -43,7 +46,6 @@ Add-UProfile -Chrome
 ## Open a Unifi Site
 ```powershell
 #avoid using -Live, it will put the servers under stress
-#Firefox with a created profile will launch, but the driver will not be created
 
 #will provide a search for a site name and open it with the default browser (-Chrome or -Firefox will force the named browser)
 #EdgeChromium or Edge will be used as default if neither Chrome or Firefox is installed
@@ -58,6 +60,41 @@ Open-USite -Chrome -Live
 #simply search for the sites server
 #-Live is supported
 Get-USiteURL
+```
+
+## Searching a MAC 
+```powershell
+#simple function to search a mac address from a device on all servers, helpfull if you forgot under which site the inform was done
+#-Live is supported
+Get-UInformSite
+```
+
+## Exporting a Site/Host Excel file
+```powershell
+#simple export a excel file under '%localappdata%\Unifi\'
+#-Live is supported
+Export-USiteXLSX
+```
+
+## Automatic Upgrade Devices over all Servers
+```powershell
+#will upgrade any device on all servers, if a device wont come to state 1 (Connected) after 7min it will stop proccess more devices
+#there is not yet a proper handler for Mesh Devices, it can happen that Mesh Devices arnt updated as the downlink ap needs to be updated first
+Invoke-UAutoUpgrade -Live
+```
+
+## Automatic Migrate Sites to other Servers
+```powershell
+#CAUTION: the function will set a few site settings on the new host, will enable advanced functions, and disable automatic upgrade and email alerts | switch parameters needs to be added
+#the function offten crash cause it cant find elements with Get-SeElement
+
+#will create a object with all necessary informations which site can be migrated
+#the functions checks 2 properties in the server.xml, 
+#migrate means all sites on this server will be migrated to others
+#migrateable means this server is a destination host, if more servers with this propertie are enabled, it will rotate using allways the server with the less adopted devices
+#there is a debug parameter -Show, it will launch the browsers without headless
+#parameter -exclude will exclude the array of sites from migrating (needs to match the site name)
+Invoke-UAutoMigrate
 ```
 
 ## Getting different stats from the servers

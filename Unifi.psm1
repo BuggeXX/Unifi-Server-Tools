@@ -53,7 +53,7 @@ Function Add-UServerFile {
         $Servers += @([PSCustomObject]@{
                 Protocol    = $URISplit.Scheme
                 Host        = $URISplit.Host
-                InformURL   = $URISplit.hostname
+                InformURL   = (Invoke-RestMethod -Uri "$Item/api/s/default/stat/sysinfo" -WebSession $myWebSession -SkipCertificateCheck).data.hostname
                 Port        = $URISplit.Port
                 InformPort  = (Invoke-RestMethod -Uri "$Item/api/s/default/stat/sysinfo" -WebSession $myWebSession -SkipCertificateCheck).data.inform_port
                 Server      = "$($URISplit.Scheme)://$($URISplit.Authority)"
