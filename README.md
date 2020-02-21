@@ -9,7 +9,10 @@ Note: It will create a directory under '%localappdata%\Unifi\' and read/write co
 
 ## Adding a Server source file
 ```powershell
-#export server as xml
+#CAUTION: it is necessary to have a valid ssl certificate for all servers
+#I will work on either a function to generate a certificate or to be able to ignore any ssl warning
+
+#create server.xml file
 #will tests connectivity to the server on <port> and try to login
 #for each server it will ask for it credential, which are stored as secure strings in the xml
 #inform Url and Port will be automatically detected
