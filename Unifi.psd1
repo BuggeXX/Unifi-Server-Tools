@@ -8,7 +8,7 @@
 # Modified Elmar Niederkofler 13.02.2020
 
 @{
-    ModuleVersion        = '2.6.0.2'
+    ModuleVersion        = '2.6.1.0'
     GUID                 = '6d390ab4-57aa-49ea-8bf0-93d1281297ec'
     Author               = 'Elmar Niederkofler'
     CompanyName          = 'Telmekom'
@@ -26,7 +26,8 @@
         'Invoke-UAutoMigrate',
         'Invoke-UAutoUpgrade',
         'Remove-USiteAlerts',
-        'Export-USiteXLSX'
+        'Export-USiteXLSX',
+        'Get-UInformSite'
     )
 
     CmdletsToExport      = @()

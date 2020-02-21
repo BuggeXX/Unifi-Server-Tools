@@ -664,7 +664,7 @@ Function Invoke-UAutoUpgrade {
                     if ($TimeOut -gt 15) {
                         Write-Warning -Message "Upgrade for $($Device.name) on site $($Site.SiteName) failed"    
                         Read-Host -Prompt 'Press enter to exit'
-                        exit
+                        return
                     }
                 }    
                 Write-Warning -Message "Upgrade for $($Device.name) on site $($Site.SiteName) successfully" 
@@ -698,6 +698,30 @@ Function Export-USiteXLSX {
     }
 
     Export-XLSX -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Site.xlsx') -InputObject $ObjectListXML -Force
+}
+
+Function Get-UInformSite {
+    param(
+        [parameter(Mandatory = $true, Position = 0)]
+        [ValidatePattern("^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$", ErrorMessage = 'Insert correct form of an MAC **:**:**:**:**:**')]
+        [string]$MAC,
+        [switch]$Live
+    ) 
+
+    if ($Live) {
+        $UData = Import-UData -Full -Live
+    }
+    else {
+        $UData = Import-UData -Full
+    }
+    if ($UData -like 'Error') {
+        return
+    }
+    foreach ($Site in $UData.Sites) {
+        foreach ($Device in $Site.Devices.data | Where-Object -Property mac -like $MAC) {
+            $Site | Select-Object -Property Server, SiteName
+        }
+    }
 }
 
 #Helper Functions
