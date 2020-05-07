@@ -700,7 +700,7 @@ Function Export-USiteXLSX {
     Export-XLSX -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Site.xlsx') -InputObject $ObjectListXML -Force
 }
 
-Function Get-UInformSite {
+Function Get-UInformSite {ö
     param(
         [parameter(Mandatory = $true, Position = 0)]
         [ValidatePattern("^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$", ErrorMessage = 'Insert correct form of an MAC **:**:**:**:**:**')]
@@ -720,6 +720,99 @@ Function Get-UInformSite {
     foreach ($Site in $UData.Sites) {
         foreach ($Device in $Site.Devices.data | Where-Object -Property mac -like $MAC) {
             $Site | Select-Object -Property Server, SiteName
+        }
+    }
+}
+
+Function Update-UWebDriver {
+    param(
+        [switch]$MSEdge,
+        [switch]$Chrome,
+        [switch]$Firefox
+    )
+
+    [string]$SeleniumVersion = (Get-InstalledModule -Name Selenium).Version
+
+    if ($MSEdge) {
+        [version]$InstalledEdgeWebDriverVersion = (Get-Item "$env:USERPROFILE\Documents\PowerShell\Modules\Selenium\$SeleniumVersion\assemblies\msedgedriver.exe").VersionInfo.ProductVersion | Out-Null
+
+        foreach ($EdgeWebDrive in (Get-Item (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Selenium\msedgedriver*')).VersionInfo) {
+            $AvailableEdgeWebDrive += @(New-Object PSObject -Property @{ 
+                    ProductName    = $EdgeWebDrive.OriginalFilename
+                    ProductVersion = [version]$EdgeWebDrive.ProductVersion
+                    FullName       = $EdgeWebDrive.FileName
+                })
+        }
+
+        if (($AvailableEdgeWebDrive.ProductVersion -gt $InstalledEdgeWebDriverVersion) -and ($AvailableEdgeWebDrive)) {
+    
+            $HighestVersion = $AvailableEdgeWebDrive | Where-Object { $_.ProductVersion -eq ($AvailableEdgeWebDrive | Measure-Object -Property ProductVersion -Maximum).Maximum }
+            try {
+                Get-Process -Name 'msedgedriver' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+                Copy-Item -Path $HighestVersion.FullName -Destination "$env:USERPROFILE\Documents\PowerShell\Modules\Selenium\$SeleniumVersion\assemblies\chromedriver.exe" -Force -ErrorAction Stop
+                Write-Warning "$($HighestVersion.ProductName) version $($HighestVersion.ProductVersion) for MSEdge has been installed"
+            }
+            catch {
+                Write-Warning 'Could not update MSEdge Web Driver'
+            }    
+        }
+        else {
+            Write-Warning 'Most recent MSEdge Web Driver is allready installed'
+        }
+    }
+
+    if ($Chrome) {
+        [version]$InstalledChromeWebDriverVersion = (Get-Item "$env:USERPROFILE\Documents\PowerShell\Modules\Selenium\$SeleniumVersion\assemblies\chromedriver.exe").VersionInfo.ProductVersion | Out-Null
+
+        foreach ($ChromeWebDrive in (Get-Item (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Selenium\chromedriver*')).VersionInfo) {
+            $AvailableChromeWebDrive += @(New-Object PSObject -Property @{ 
+                    ProductName    = $ChromeWebDrive.OriginalFilename
+                    ProductVersion = [version]$ChromeWebDrive.ProductVersion
+                    FullName       = $ChromeWebDrive.FileName
+                })
+        }
+
+        if (($AvailableChromeWebDrive.ProductVersion -gt $InstalledChromeWebDriverVersion) -and ($AvailableChromeWebDrive)) {
+    
+            $HighestVersion = $AvailableChromeWebDrive | Where-Object { $_.ProductVersion -eq ($AvailableChromeWebDrive | Measure-Object -Property ProductVersion -Maximum).Maximum }
+            try {
+                Get-Process -Name 'chromedriver' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+                Copy-Item -Path $HighestVersion.FullName -Destination "$env:USERPROFILE\Documents\PowerShell\Modules\Selenium\$SeleniumVersion\assemblies\chromedriver.exe" -Force -ErrorAction Stop
+                Write-Warning "$($HighestVersion.ProductName) version $($HighestVersion.ProductVersion) for Chrome has been installed"
+            }
+            catch {
+                Write-Warning 'Could not update Chrome Web Driver'
+            }    
+        }
+        else {
+            Write-Warning 'Most recent Chrome Web Driver is allready installed'
+        }
+    }
+    if ($Firefox) {
+        [version]$InstalledFirefoxWebDriverVersion = (Get-Item "$env:USERPROFILE\Documents\PowerShell\Modules\Selenium\$SeleniumVersion\assemblies\geckodriver.exe").VersionInfo.ProductVersion | Out-Null
+
+        foreach ($FirefoxWebDrive in (Get-Item (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Selenium\geckodriver*')).VersionInfo) {
+            $AvailableFirefoxWebDrive += @(New-Object PSObject -Property @{ 
+                    ProductName    = $FirefoxWebDrive.OriginalFilename
+                    ProductVersion = [version]$FirefoxWebDrive.ProductVersion
+                    FullName       = $FirefoxWebDrive.FileName
+                })
+        }
+
+        if (($AvailableFirefoxWebDrive.ProductVersion -gt $InstalledFirefoxWebDriverVersion) -and ($AvailableFirefoxWebDrive)) {
+    
+            $HighestVersion = $AvailableFirefoxWebDrive | Where-Object { $_.ProductVersion -eq ($AvailableFirefoxWebDrive | Measure-Object -Property ProductVersion -Maximum).Maximum }
+            try {
+                Get-Process -Name 'geckodriver' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+                Copy-Item -Path $HighestVersion.FullName -Destination "$env:USERPROFILE\Documents\PowerShell\Modules\Selenium\$SeleniumVersion\assemblies\geckodriver.exe" -Force -ErrorAction Stop
+                Write-Warning "$($HighestVersion.ProductName) version $($HighestVersion.ProductVersion) for Firefox has been installed"
+            }
+            catch {
+                Write-Warning 'Could not update Firefox Web Driver'
+            }    
+        }
+        else {
+            Write-Warning 'Most recent Firefox Web Driver is allready installed'
         }
     }
 }

@@ -113,5 +113,16 @@ Invoke-UAutoMigrate
 Get-UServerStats
 ```
 
+## Upgrade Webdriver for MSEdge, Chrome or Firefox
+```powershell
+#this function will replace the selenium web driver under $env:USERPROFILE\Documents\PowerShell\Modules\Selenium\$SeleniumVersion\assemblies\ with the most
+#recent version found in $env:LOCALAPPDATA\Unifi\Selenium\
+#IMPORTANT: this exe file needs to have the field VersionNumber to have a valid version and OriginalFilename to have the filename like geckodriver.exe(Firefox),
+#chromedriver.exe(Chrome) and msedgedriver.exe(MSEdge)
+#MSEdge drivers allready have all fields in place
+#you can use https://www.carifred.com/fvie/ to edit the exe
+Update-UWebDriver -MSEdge -Chrome -Firefox
+```
+
 # Maintainers 
 - [Elmar Niederkofler](https://github.com/BuggeXX)
