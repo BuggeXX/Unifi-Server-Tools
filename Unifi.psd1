@@ -8,7 +8,7 @@
 # Modified Elmar Niederkofler 13.02.2020
 
 @{
-    ModuleVersion        = '2.6.1.1'
+    ModuleVersion        = '2.7.0.1'
     GUID                 = '6d390ab4-57aa-49ea-8bf0-93d1281297ec'
     Author               = 'Elmar Niederkofler'
     CompanyName          = 'Telmekom'
@@ -27,12 +27,13 @@
         'Invoke-UAutoUpgrade',
         'Remove-USiteAlerts',
         'Export-USiteXLSX',
-        'Get-UInformSite'
+        'Get-UInformSite',
+        'Update-UWebDriver'
     )
 
     CmdletsToExport      = @()
     VariablesToExport    = @()
-    PowerShellVersion    = '6.2'
+    PowerShellVersion    = '7.0'
     DscResourcesToExport = @()
     FileList             = @(
         '.\Examples',
