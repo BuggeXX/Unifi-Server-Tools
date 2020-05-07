@@ -700,7 +700,7 @@ Function Export-USiteXLSX {
     Export-XLSX -Path (Join-Path -Path $Env:LOCALAPPDATA -ChildPath 'Unifi\Site.xlsx') -InputObject $ObjectListXML -Force
 }
 
-Function Get-UInformSite {ö
+Function Get-UInformSite {
     param(
         [parameter(Mandatory = $true, Position = 0)]
         [ValidatePattern("^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$", ErrorMessage = 'Insert correct form of an MAC **:**:**:**:**:**')]
