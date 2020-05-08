@@ -8,7 +8,7 @@
 # Modified Elmar Niederkofler 13.02.2020
 
 @{
-    ModuleVersion        = '2.7.0.1'
+    ModuleVersion        = '2.7.0.2'
     GUID                 = '6d390ab4-57aa-49ea-8bf0-93d1281297ec'
     Author               = 'Elmar Niederkofler'
     CompanyName          = 'Telmekom'
@@ -36,7 +36,6 @@
     PowerShellVersion    = '7.0'
     DscResourcesToExport = @()
     FileList             = @(
-        '.\Examples',
         '.\README.md',
         '.\Unifi.psm1'
     )
@@ -59,7 +58,7 @@
     # CompatiblePSEditions = @()
 
     # Aliases to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no aliases to export.
-    #AliasesToExport = @()
+    # AliasesToExport = @()
 
     # Script files (.ps1) that are run in the caller's environment prior to importing this module.
     # ScriptsToProcess = @()
