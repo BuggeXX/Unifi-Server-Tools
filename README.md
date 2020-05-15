@@ -1,5 +1,6 @@
 # Unifi Controller PowerShell Module
 - Work in progress, not all features are available yet
+- Proper Ram cleaning needs to be implemented, calling function wont clean RAM after
 - Reading all kind of informations from Unifi Controllers
 - Invoking different task such as updating devices over all sites
 - Automated browsing to a site will require https://github.com/adamdriscoll/selenium-powershell to be installed
@@ -82,6 +83,15 @@ Export-USiteXLSX
 ## Automatic Upgrade Devices over all Servers
 ```powershell
 #will upgrade any device on all servers, if a device wont come to state 1 (Connected) after 7min it will stop proccess more devices
+#there is not yet a proper handler for Mesh Devices, it can happen that Mesh Devices arnt updated as the downlink ap needs to be updated first
+Invoke-UAutoUpgrade -Live
+```
+
+## Automatic Upgrade Devices parallel on all Servers
+```powershell
+#will upgrade any device on all servers
+#depens on how many devices are handled this function can eat up lots of ram (3300 ~ 3gb Ram), proper disposal needs to be implented
+#Status reports will be written back to the console
 #there is not yet a proper handler for Mesh Devices, it can happen that Mesh Devices arnt updated as the downlink ap needs to be updated first
 Invoke-UAutoUpgrade -Live
 ```
