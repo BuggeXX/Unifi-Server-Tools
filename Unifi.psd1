@@ -8,7 +8,7 @@
 # Modified Elmar Niederkofler 13.02.2020
 
 @{
-    ModuleVersion        = '2.7.0.2'
+    ModuleVersion        = '2.7.2.2'
     GUID                 = '6d390ab4-57aa-49ea-8bf0-93d1281297ec'
     Author               = 'Elmar Niederkofler'
     CompanyName          = 'Telmekom'
@@ -28,7 +28,8 @@
         'Remove-USiteAlerts',
         'Export-USiteXLSX',
         'Get-UInformSite',
-        'Update-UWebDriver'
+        'Update-UWebDriver',
+        'Invoke-UAutoClusterUpgrade'
     )
 
     CmdletsToExport      = @()
