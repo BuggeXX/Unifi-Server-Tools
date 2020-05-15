@@ -92,8 +92,9 @@ Invoke-UAutoUpgrade -Live
 #will upgrade any device on all servers
 #depens on how many devices are handled this function can eat up lots of ram (3300 ~ 3gb Ram), proper disposal needs to be implented
 #Status reports will be written back to the console
+#function will create a site xml file under '%localappdata%\Unifi\' for each server which will be read by the backgroundworker
 #there is not yet a proper handler for Mesh Devices, it can happen that Mesh Devices arnt updated as the downlink ap needs to be updated first
-Invoke-UAutoUpgrade -Live
+Invoke-UAutoClusterUpgrade -Live
 ```
 
 ## Automatic Migrate Sites to other Servers
