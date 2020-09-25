@@ -785,8 +785,6 @@ Function Invoke-UAutoClusterUpgrade {
                 New-Event -SourceIdentifier CommonEvent -MessageData "Firmware Rollout on server $($Using:Server.Server) started"
                 Start-Sleep -Seconds 30
 
-                New-Event -SourceIdentifier InfoEvent -MessageData "Starting Upgrade for $($Device.name) on site $($Site.SiteName) on server $($Site.Server)"
-
                 foreach ($Site in $UData) {
                     foreach ($Device in ($Site.Devices.data) | Where-Object -Property upgradable -like 'true') {       
                         
