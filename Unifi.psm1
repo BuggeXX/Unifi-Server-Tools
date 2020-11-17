@@ -560,7 +560,7 @@ Function Invoke-UAutoMigrate {
                                 $DriverNew = Start-SeChrome -Headless -StartURL $MigrationHost[0].Server -Quiet -DefaultDownloadPath "$env:LOCALAPPDATA\Unifi\Export"
                             }
 
-                            while ($DriverNew.Url -notmatch 'unifi.telmekom.net:8443') { }
+                            while ($DriverNew.Url -notmatch 'unifi.telmekom.cloud') { }
 
                             $CredentialNew = @{
                                 username = ($UData.Server[(($UData.Server.Host).IndexOf($MigrationHost[0].Host))].UserName)
